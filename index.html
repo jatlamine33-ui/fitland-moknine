@@ -106,7 +106,7 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
 }
 
 /* ══════ LOGIN ══════ */
-#screen-login{background:var(--ink);position:relative;overflow:hidden}
+#screen-login{background:var(--ink);position:relative;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .login-bg-grid{
   position:absolute;inset:0;
   background-image:linear-gradient(var(--wire) 1px,transparent 1px),linear-gradient(90deg,var(--wire) 1px,transparent 1px);
@@ -150,6 +150,38 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
   margin-bottom:4px;
 }
 .login-sub{font-size:13px;color:var(--ash);margin-bottom:24px}
+
+/* CHOICE BUTTONS */
+.choice-btn{
+  width:100%;background:var(--ink3);
+  border:1px solid var(--wire);border-radius:14px;
+  padding:16px 18px;display:flex;align-items:center;gap:14px;
+  cursor:pointer;transition:all 0.2s;margin-bottom:10px;
+  text-align:left;
+}
+.choice-btn:active{transform:scale(0.98)}
+.choice-btn.prim{border-color:rgba(200,255,0,0.4);background:var(--lime-dim)}
+.choice-btn-icon{
+  width:46px;height:46px;border-radius:12px;
+  background:var(--ink4);display:flex;
+  align-items:center;justify-content:center;flex-shrink:0;
+  color:var(--ash);transition:background 0.2s;
+}
+.choice-btn.prim .choice-btn-icon{background:rgba(200,255,0,0.15);color:var(--lime)}
+.choice-btn-label{
+  font-family:'Bebas Neue',sans-serif;font-size:19px;
+  letter-spacing:1px;color:var(--snow);line-height:1.1;
+}
+.choice-btn.prim .choice-btn-label{color:var(--lime)}
+.choice-btn-sub{font-size:11px;color:var(--ash);margin-top:3px}
+.btn-back{
+  display:flex;align-items:center;gap:8px;
+  background:none;border:none;color:var(--fog);
+  font-size:11px;cursor:pointer;padding:0;margin-bottom:22px;
+  letter-spacing:2px;text-transform:uppercase;
+  transition:color 0.2s;font-family:'DM Sans',sans-serif;
+}
+.btn-back:active{color:var(--lime)}
 
 .fl-label{font-size:10px;color:var(--fog);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;display:block}
 .fl-input{
@@ -931,25 +963,76 @@ input[type=range]::-webkit-slider-thumb{
     </div>
   </div>
   <div class="login-sheet">
-    <div class="login-title">Bienvenue 👋</div>
-    <div class="login-sub">Inscris-toi pour commencer — أهلاً بك</div>
-    <label class="fl-label">Nom complet / الاسم الكامل</label>
-    <input class="fl-input" id="inp-name" type="text" placeholder="Nom et prénom" autocomplete="name">
-    <label class="fl-label">Téléphone / الهاتف</label>
-    <input class="fl-input" id="inp-phone" type="tel" placeholder="Numéro de téléphone" autocomplete="tel">
-    <label class="fl-label">Date de naissance / تاريخ الميلاد</label>
-    <input class="fl-input" id="inp-dob" type="date" style="color-scheme:dark">
-    <label class="fl-label">Sexe / الجنس</label>
-    <div class="sex-grid">
-      <div class="sex-btn" id="sex-m" onclick="selectSex('homme',this)">👨 Homme</div>
-      <div class="sex-btn" id="sex-f" onclick="selectSex('femme',this)">👩 Femme</div>
+
+    <!-- ══ VUE 1 : CHOIX ══ -->
+    <div id="v-choice">
+      <div class="login-title">Fitland</div>
+      <div class="login-sub" style="margin-bottom:28px">Moknine — مكنين</div>
+      <button class="choice-btn prim" onclick="showRegister()">
+        <div class="choice-btn-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        </div>
+        <div>
+          <div class="choice-btn-label">Nouveau membre</div>
+          <div class="choice-btn-sub">Créer un compte — إنشاء حساب</div>
+        </div>
+      </button>
+      <button class="choice-btn" onclick="showLoginForm()">
+        <div class="choice-btn-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        </div>
+        <div>
+          <div class="choice-btn-label">Déjà membre</div>
+          <div class="choice-btn-sub">Se connecter — تسجيل الدخول</div>
+        </div>
+      </button>
     </div>
-    <label class="fl-label">Taille / الطول</label>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <input class="fl-input" id="inp-taille" type="number" placeholder="Taille" style="margin-bottom:0;flex:1">
-      <span style="color:var(--ash);font-size:13px">cm</span>
+
+    <!-- ══ VUE 2 : INSCRIPTION ══ -->
+    <div id="v-register" style="display:none">
+      <button class="btn-back" onclick="backToChoice()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Retour
+      </button>
+      <div class="login-title">Nouveau compte</div>
+      <div class="login-sub">Inscris-toi — أهلاً بك</div>
+      <label class="fl-label">Nom complet / الاسم الكامل</label>
+      <input class="fl-input" id="inp-name" type="text" placeholder="Nom et prénom" autocomplete="name">
+      <label class="fl-label">Téléphone / الهاتف</label>
+      <input class="fl-input" id="inp-phone" type="tel" placeholder="Numéro de téléphone" autocomplete="tel">
+      <label class="fl-label">Date de naissance / تاريخ الميلاد</label>
+      <input class="fl-input" id="inp-dob" type="date" style="color-scheme:dark">
+      <label class="fl-label">Sexe / الجنس</label>
+      <div class="sex-grid">
+        <div class="sex-btn" id="sex-m" onclick="selectSex('homme',this)">👨 Homme</div>
+        <div class="sex-btn" id="sex-f" onclick="selectSex('femme',this)">👩 Femme</div>
+      </div>
+      <label class="fl-label">Taille / الطول</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <input class="fl-input" id="inp-taille" type="number" placeholder="Taille" inputmode="decimal" style="margin-bottom:0;flex:1">
+        <span style="color:var(--ash);font-size:13px">cm</span>
+      </div>
+      <label class="fl-label">Poids actuel / الوزن الحالي</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <input class="fl-input" id="inp-poids" type="number" placeholder="Poids" inputmode="decimal" style="margin-bottom:0;flex:1">
+        <span style="color:var(--ash);font-size:13px">kg</span>
+      </div>
+      <button class="btn-primary" onclick="goToQcm()">COMMENCER — ابدأ</button>
     </div>
-    <button class="btn-primary" onclick="goToQcm()">COMMENCER — ابدأ</button>
+
+    <!-- ══ VUE 3 : CONNEXION ══ -->
+    <div id="v-login" style="display:none">
+      <button class="btn-back" onclick="backToChoice()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Retour
+      </button>
+      <div class="login-title">Connexion</div>
+      <div class="login-sub">Entre ton numéro pour retrouver ton compte — أدخل رقمك للدخول</div>
+      <label class="fl-label">Téléphone / الهاتف</label>
+      <input class="fl-input" id="inp-login-phone" type="tel" placeholder="Numéro de téléphone" autocomplete="tel">
+      <button class="btn-primary" onclick="doLogin()" style="margin-top:8px">SE CONNECTER — دخول</button>
+    </div>
+
   </div>
 </div>
 
@@ -1288,6 +1371,43 @@ input[type=range]::-webkit-slider-thumb{
                 <td><span class="price-old">480 DT</span><span class="price-val">385</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
                 <td><span class="price-old">960 DT</span><span class="price-val">770</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
               </tr>
+              <tr>
+                <td>Pack Totale<br><span style="font-size:10px;color:var(--ash)">الحزمة الكاملة</span></td>
+                <td><span class="price-val">100</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">300 DT</span><span class="price-val">240</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">600 DT</span><span class="price-val">480</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">1200 DT</span><span class="price-val">960</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+              </tr>
+              <tr><td colspan="5" style="background:rgba(200,255,0,0.06);padding:6px 10px;font-size:11px;color:var(--lime);text-align:center;font-weight:700;letter-spacing:1px">— KIDS COURS —</td></tr>
+              <tr>
+                <td>Gymnastique<br><span style="font-size:10px;color:var(--ash)">جمباز</span></td>
+                <td><span class="price-val">40</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">120 DT</span><span class="price-val">105</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">240 DT</span><span class="price-val">190</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">480 DT</span><span class="price-val">345</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+              </tr>
+              <tr>
+                <td>Karaté<br><span style="font-size:10px;color:var(--ash)">كاراتيه</span></td>
+                <td><span class="price-val">45</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">135 DT</span><span class="price-val">120</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">270 DT</span><span class="price-val">215</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">540 DT</span><span class="price-val">405</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+              </tr>
+              <tr>
+                <td>Danse<br><span style="font-size:10px;color:var(--ash)">رقص</span></td>
+                <td><span class="price-val">30</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">90 DT</span><span class="price-val">80</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">180 DT</span><span class="price-val">145</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">360 DT</span><span class="price-val">260</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+              </tr>
+              <tr>
+                <td>Psychomotricité<br><span style="font-size:10px;color:var(--ash)">سيكوموتريسيتي</span></td>
+                <td><span class="price-val">35</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">105 DT</span><span class="price-val">85</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">210 DT</span><span class="price-val">170</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+                <td><span class="price-old">420 DT</span><span class="price-val">340</span><span style="font-size:10px;color:var(--ash)"> DT</span></td>
+              </tr>
+              <tr><td colspan="5" style="background:rgba(255,159,10,0.08);padding:8px 10px;font-size:10px;color:#ff9f0a;text-align:center">🎉 <strong>Offre Spéciale</strong> — Sur 3 abonnements successifs Pack Après-midi ou Pack Totale, le 3ème est à <strong>50%</strong> !</td></tr>
             </tbody>
           </table>
         </div>
@@ -1459,12 +1579,12 @@ input[type=range]::-webkit-slider-thumb{
         </div>
       </div>
 
-      <!-- LOGOUT -->
-      <div class="section" style="margin-bottom:32px;margin-top:8px">
-        <button onclick="logoutUser()" style="width:100%;background:transparent;border:1px solid rgba(255,59,48,0.3);border-radius:12px;padding:14px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:#ff3b30;cursor:pointer;transition:all 0.2s">
+      <div style="padding:0 20px;margin-top:8px;margin-bottom:32px">
+        <button onclick="logoutUser()" style="width:100%;background:transparent;border:1px solid rgba(255,59,48,0.4);border-radius:12px;padding:14px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:#ff3b30;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
           ⏻ Se déconnecter — تسجيل الخروج
         </button>
       </div>
+
     </div>
 
     <!-- ── PAGE CALC ── -->
@@ -1763,6 +1883,35 @@ function switchScreen(id){
   document.getElementById('screen-'+id).classList.add('active');
 }
 
+// ===== CHOICE / LOGIN VIEWS =====
+function showRegister(){
+  document.getElementById('v-choice').style.display='none';
+  document.getElementById('v-register').style.display='block';
+}
+function showLoginForm(){
+  document.getElementById('v-choice').style.display='none';
+  document.getElementById('v-login').style.display='block';
+}
+function backToChoice(){
+  document.getElementById('v-register').style.display='none';
+  document.getElementById('v-login').style.display='none';
+  document.getElementById('v-choice').style.display='block';
+}
+async function doLogin(){
+  const phone = document.getElementById('inp-login-phone').value.trim();
+  if(!phone){ alert('Entre ton numéro — أدخل رقم هاتفك'); return; }
+  const btn = document.querySelector('#v-login .btn-primary');
+  if(btn){ btn.textContent='Connexion...'; btn.style.opacity='0.7'; }
+  const found = await loadFromCloud(phone);
+  if(btn){ btn.textContent='SE CONNECTER — دخول'; btn.style.opacity='1'; }
+  if(found){
+    showMain();
+  } else {
+    alert('Numéro introuvable. Crée un nouveau compte. — الرقم غير موجود');
+    backToChoice();
+  }
+}
+
 // ===== LOGIN =====
 let selectedSex = '';
 function selectSex(val, el){
@@ -1775,7 +1924,8 @@ async function goToQcm(){
   const phone = document.getElementById('inp-phone').value.trim();
   const dob = document.getElementById('inp-dob').value;
   const taille = document.getElementById('inp-taille').value;
-  if(!name||!phone||!dob||!selectedSex||!taille){
+  const poids = document.getElementById('inp-poids').value;
+  if(!name||!phone||!dob||!selectedSex||!taille||!poids){
     alert('Merci de remplir tous les champs — يرجى ملء جميع الحقول');return;
   }
   // Check if user already exists in cloud
@@ -1794,6 +1944,7 @@ async function goToQcm(){
   userData.dob = dob;
   userData.sexe = selectedSex;
   userData.taille = taille;
+  userData.poids = parseFloat(poids);
   saveUser();
   document.getElementById('qdot-1').classList.add('done');
   switchScreen('qcm');
@@ -2765,12 +2916,11 @@ function initProgPage(){
   highlightRecommendedProg();
 }
 
-// ===== LOGOUT =====
-function logoutUser(){
-  if(!confirm('Déconnexion ? — هل تريد تسجيل الخروج؟')) return;
-  localStorage.removeItem('fitland_user');
-  userData = {};
-  switchScreen('login');
+// ===== LANG TOGGLE =====
+function toggleLang(){
+  currentLang = currentLang==='fr'?'ar':'fr';
+  document.getElementById('lang-btn').textContent = currentLang==='fr'?'AR':'FR';
+  document.getElementById('lang-btn').classList.toggle('ar-active', currentLang==='ar');
 }
 
 // ===== TARIFS =====
@@ -2802,6 +2952,12 @@ if('serviceWorker' in navigator){
       .then(r=>console.log('SW registered'))
       .catch(e=>console.log('SW error:', e));
   });
+}
+function logoutUser(){
+  if(!confirm('Déconnexion ? — هل تريد تسجيل الخروج؟')) return;
+  localStorage.removeItem('fitland_user');
+  userData = {};
+  location.reload();
 }
 </script>
 </body>
