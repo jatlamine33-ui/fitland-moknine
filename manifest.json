@@ -1,0 +1,22 @@
+{
+  "name": "Fitland Moknine",
+  "short_name": "Fitland",
+  "description": "Votre salle de sport Fitland Moknine",
+  "start_url": "/fitland_moknine_app.html",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#C8FF00",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
