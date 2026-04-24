@@ -1041,7 +1041,7 @@ input[type=range]::-webkit-slider-thumb{
         <div class="topbar-name" id="display-name">Membre 👋</div>
       </div>
     </div>
-    <div class="lang-btn" id="lang-btn" onclick="toggleLang()">AR</div>
+    
   </div>
 
   <!-- PAGES CONTAINER -->
@@ -1457,6 +1457,13 @@ input[type=range]::-webkit-slider-thumb{
           </div>
           <div id="poids-history-list" style="margin-top:10px"></div>
         </div>
+      </div>
+
+      <!-- LOGOUT -->
+      <div class="section" style="margin-bottom:32px;margin-top:8px">
+        <button onclick="logoutUser()" style="width:100%;background:transparent;border:1px solid rgba(255,59,48,0.3);border-radius:12px;padding:14px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:#ff3b30;cursor:pointer;transition:all 0.2s">
+          ⏻ Se déconnecter — تسجيل الخروج
+        </button>
       </div>
     </div>
 
@@ -2758,11 +2765,12 @@ function initProgPage(){
   highlightRecommendedProg();
 }
 
-// ===== LANG TOGGLE =====
-function toggleLang(){
-  currentLang = currentLang==='fr'?'ar':'fr';
-  document.getElementById('lang-btn').textContent = currentLang==='fr'?'AR':'FR';
-  document.getElementById('lang-btn').classList.toggle('ar-active', currentLang==='ar');
+// ===== LOGOUT =====
+function logoutUser(){
+  if(!confirm('Déconnexion ? — هل تريد تسجيل الخروج؟')) return;
+  localStorage.removeItem('fitland_user');
+  userData = {};
+  switchScreen('login');
 }
 
 // ===== TARIFS =====
