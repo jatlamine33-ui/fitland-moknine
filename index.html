@@ -930,7 +930,6 @@ input[type=range]::-webkit-slider-thumb{
 .text-ash{color:var(--ash)}
 .px20{padding:0 20px}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1760,7 +1759,120 @@ input[type=range]::-webkit-slider-thumb{
 // ===== SUPABASE =====
 const SUPA_URL = 'https://goukcdzjzaokrqggpzqu.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvdWtjZHpqemFva3JxZ2dwenF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMDYyNjcsImV4cCI6MjA5MjU4MjI2N30.UUQabgwtZSu6CY9tX2t9djyZ5Z84gQYcCbTnO5I0KKs';
-const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+async function supaFetch(method, table, body=null, query='') {
+  const url = `${SUPA_URL}/rest/v1/${table}${query}`;
+  const opts = {
+    method,
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': method==='POST' ? 'resolution=merge-duplicates' : ''
+    }
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  if(!res.ok) {
+    const err = await res.text();
+    throw new Error(`${res.status}: ${err}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function syncToCloud() {
+  if(!userData.phone) return;
+  try {
+    // Upsert user
+    await supaFetch('POST', 'users', {
+      phone: userData.phone,
+      name: userData.name||'',
+      dob: userData.dob||null,
+      sexe: userData.sexe||null,
+      taille: parseInt(userData.taille)||null,
+      objectif: userData.objectif||null,
+      niveau: userData.niveau||null,
+      frequence: userData.frequence||null,
+      poids: parseFloat(userData.poids)||null,
+      abo_start: userData.aboStart||null,
+      abo_dur: parseInt(userData.aboDur)||null,
+      updated_at: new Date().toISOString()
+    }, '?on_conflict=phone');
+
+    // Sync poids history
+    if(userData.poidsHistory) {
+      const annee = new Date().getFullYear();
+      for(const [mois, poids] of Object.entries(userData.poidsHistory)) {
+        await supaFetch('POST', 'poids_history', {
+          user_phone: userData.phone,
+          mois: parseInt(mois),
+          annee: annee,
+          poids: parseFloat(poids)
+        }, '?on_conflict=user_phone,mois,annee');
+      }
+    }
+
+    // Sync charges
+    if(userData.charges) {
+      for(const [exercice, data] of Object.entries(userData.charges)) {
+        await supaFetch('POST', 'charges', {
+          user_phone: userData.phone,
+          exercice: exercice,
+          kg: parseFloat(data.kg),
+          prev_kg: data.prev ? parseFloat(data.prev) : null,
+          updated_at: new Date().toISOString()
+        }, '?on_conflict=user_phone,exercice');
+      }
+    }
+    console.log('Sync OK!');
+  } catch(e) {
+    console.error('Sync error:', e);
+  }
+}
+
+async function loadFromCloud(phone) {
+  try {
+    const users = await supaFetch('GET', 'users', null, `?phone=eq.${encodeURIComponent(phone)}&limit=1`);
+    if(!users || users.length === 0) return false;
+    const user = users[0];
+
+    userData = {
+      ...userData,
+      phone: user.phone,
+      name: user.name,
+      dob: user.dob,
+      sexe: user.sexe,
+      taille: user.taille,
+      objectif: user.objectif,
+      niveau: user.niveau,
+      frequence: user.frequence,
+      poids: user.poids,
+      aboStart: user.abo_start,
+      aboDur: user.abo_dur,
+    };
+
+    // Load poids history
+    const poids = await supaFetch('GET', 'poids_history', null, `?user_phone=eq.${encodeURIComponent(phone)}`);
+    if(poids && poids.length > 0) {
+      userData.poidsHistory = {};
+      poids.forEach(p => { userData.poidsHistory[p.mois] = p.poids; });
+    }
+
+    // Load charges
+    const charges = await supaFetch('GET', 'charges', null, `?user_phone=eq.${encodeURIComponent(phone)}`);
+    if(charges && charges.length > 0) {
+      userData.charges = {};
+      charges.forEach(c => { userData.charges[c.exercice] = {kg: c.kg, prev: c.prev_kg, date: new Date(c.updated_at).toLocaleDateString('fr-FR')}; });
+    }
+
+    saveUser();
+    return true;
+  } catch(e) {
+    console.error('Load error:', e);
+    return false;
+  }
+}
 
 // ===== STATE =====
 let userData = JSON.parse(localStorage.getItem('fitland_user')||'{}');
@@ -1770,7 +1882,6 @@ let currentLang = 'fr';
 // ===== SUPABASE SYNC =====
 async function syncToCloud() {
   if(!userData.phone) return;
-  console.log('Syncing to cloud...', userData.phone);
   try {
     // Upsert user
     await supa.from('users').upsert({
@@ -1814,8 +1925,7 @@ async function syncToCloud() {
       }
     }
   } catch(e) {
-    console.error('Sync error:', e);
-    alert('Erreur sync: ' + e.message);
+    console.log('Sync error:', e);
   }
 }
 
@@ -1936,6 +2046,9 @@ async function goToQcm(){
   const exists = await loadFromCloud(phone);
   if(btn){ btn.textContent='COMMENCER — ابدأ'; btn.style.opacity='1'; }
   if(exists){
+    // Phone already exists - block new registration
+    alert('Ce numéro est déjà enregistré. Utilise "Déjà membre" pour te connecter.\n\nهذا الرقم مسجل مسبقاً. استخدم "عضو موجود" لتسجيل الدخول.');
+    return;
     // User found in cloud - go directly to app
     showMain();
     return;
