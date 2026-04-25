@@ -2710,21 +2710,23 @@ const PROGRAMMES = {
 function renderProgrammes(){
   const obj = userData.objectif||'';
   const freq = parseInt(userData.frequence)||3;
-  // Frequency determines programme complexity
   let niv;
   if(freq <= 3) niv = 'debutant';
   else if(freq <= 4) niv = 'intermediaire';
   else niv = 'avance';
+
   const list = document.getElementById('prog-list');
   if(!list) return;
   list.innerHTML='';
-  const cats = obj ? [obj] : Object.keys(PROGRAMMES);
+
   const lvlLabels = {debutant:'Débutant',intermediaire:'Intermédiaire',avance:'Avancé'};
   const lvlClasses = {debutant:'lvl-deb',intermediaire:'lvl-int',avance:'lvl-adv'};
 
+  // Only show programme matching user objectif
+  const cats = obj ? [obj] : Object.keys(PROGRAMMES);
+
   cats.forEach(cat=>{
     if(!PROGRAMMES[cat]) return;
-    // Show ONLY the programme matching the user's niveau
     const p = PROGRAMMES[cat][niv];
     if(!p) return;
 
@@ -2743,7 +2745,10 @@ function renderProgrammes(){
       joursHTML+=`<div class="prog-day"><div class="prog-day-title">${j.titre}</div>${exHTML}</div>`;
     });
 
-    card.innerHTML=`
+    // Show recommended badge if objectif matches
+    const badge = obj ? `<div class="prog-recommended-badge">⭐ Recommandé pour toi — موصى به لك</div>` : '';
+
+    card.innerHTML=`${badge}
       <div class="prog-head" onclick="toggleProg(this)">
         <div>
           <div class="prog-title">${p.titre}</div>
@@ -2754,9 +2759,11 @@ function renderProgrammes(){
       </div>
       <div class="prog-body">${joursHTML}<div class="prog-progress"><div class="prog-progress-bar" style="width:0%"></div></div></div>`;
 
+    if(obj) card.style.border='2px solid var(--lime)';
     list.appendChild(card);
   });
 }
+
 
 // ===== TIMER =====
 let timerInterval = null;
