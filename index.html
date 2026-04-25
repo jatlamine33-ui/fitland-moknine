@@ -1770,6 +1770,7 @@ let currentLang = 'fr';
 // ===== SUPABASE SYNC =====
 async function syncToCloud() {
   if(!userData.phone) return;
+  console.log('Syncing to cloud...', userData.phone);
   try {
     // Upsert user
     await supa.from('users').upsert({
@@ -1813,7 +1814,8 @@ async function syncToCloud() {
       }
     }
   } catch(e) {
-    console.log('Sync error:', e);
+    console.error('Sync error:', e);
+    alert('Erreur sync: ' + e.message);
   }
 }
 
