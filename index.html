@@ -1123,7 +1123,7 @@ input[type=range]::-webkit-slider-thumb{
         <div class="topbar-name" id="display-name">Membre 👋</div>
       </div>
     </div>
-    <div class="lang-btn" id="lang-btn" onclick="toggleLang()">AR</div>
+    
   </div>
 
   <!-- PAGES CONTAINER -->
@@ -1749,25 +1749,37 @@ let currentLang = 'fr';
 async function syncToCloud() {
   if(!userData.phone) return;
   try {
-    await supaFetch('POST', 'users', {
-      phone: userData.phone,
-      name: userData.name||'',
-      dob: userData.dob||null,
-      sexe: userData.sexe||null,
-      taille: parseInt(userData.taille)||null,
-      objectif: userData.objectif||null,
-      niveau: userData.niveau||null,
-      frequence: userData.frequence||null,
-      poids: parseFloat(userData.poids)||null,
-      abo_start: userData.aboStart||null,
-      abo_dur: parseInt(userData.aboDur)||null,
-      updated_at: new Date().toISOString()
-    }, '?on_conflict=phone');
-    console.log('Sync OK!');
+    const res = await fetch(SUPA_URL + '/rest/v1/users', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({
+        phone: userData.phone,
+        name: userData.name||'',
+        dob: userData.dob||null,
+        sexe: userData.sexe||null,
+        taille: parseInt(userData.taille)||null,
+        objectif: userData.objectif||null,
+        niveau: userData.niveau||null,
+        frequence: userData.frequence||null,
+        poids: parseFloat(userData.poids)||null,
+        abo_start: userData.aboStart||null,
+        abo_dur: parseInt(userData.aboDur)||null,
+        updated_at: new Date().toISOString()
+      })
+    });
+    const txt = await res.text();
+    console.log('Sync result:', res.status, txt);
   } catch(e) {
     console.error('Sync error:', e.message);
   }
 }
+
+
 
 async function loadFromCloud(phone) {
   try {
@@ -2897,7 +2909,7 @@ if('serviceWorker' in navigator){
 
 // ===== LOGOUT =====
 function logoutUser(){
-  document.getElementById('custom-modal').style.display='flex';
+  const m=document.getElementById('custom-modal'); if(m){m.style.display='flex';m.style.alignItems='center';m.style.justifyContent='center';}
 }
 function closeModal(){
   document.getElementById('custom-modal').style.display='none';
