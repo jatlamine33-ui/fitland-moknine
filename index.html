@@ -998,7 +998,7 @@ input[type=range]::-webkit-slider-thumb{
       <label class="fl-label">Nom complet / الاسم الكامل</label>
       <input class="fl-input" id="inp-name" type="text" placeholder="Nom et prénom" autocomplete="name">
       <label class="fl-label">Téléphone / الهاتف</label>
-      <input class="fl-input" id="inp-phone" type="tel" placeholder="Numéro de téléphone" autocomplete="tel">
+      <input class="fl-input" id="inp-phone" type="tel" maxlength="8" pattern="[0-9]{8}" inputmode="numeric" placeholder="Ex: 51 224 224" autocomplete="tel">
       <label class="fl-label">Date de naissance / تاريخ الميلاد</label>
       <input class="fl-input" id="inp-dob" type="date" style="color-scheme:dark">
       <label class="fl-label">Sexe / الجنس</label>
@@ -1028,7 +1028,7 @@ input[type=range]::-webkit-slider-thumb{
       <div class="login-title">Connexion</div>
       <div class="login-sub">Entre ton numéro pour retrouver ton compte — أدخل رقمك للدخول</div>
       <label class="fl-label">Téléphone / الهاتف</label>
-      <input class="fl-input" id="inp-login-phone" type="tel" placeholder="Numéro de téléphone" autocomplete="tel">
+      <input class="fl-input" id="inp-login-phone" type="tel" placeholder="Ex: 51 224 224" autocomplete="tel">
       <button class="btn-primary" onclick="doLogin()" style="margin-top:8px">SE CONNECTER — دخول</button>
     </div>
 
