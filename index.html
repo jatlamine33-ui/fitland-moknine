@@ -2273,6 +2273,19 @@ function addCharge(){
   saveUser();
   renderCharges();
   document.getElementById('charge-val').value='';
+  if(userData.phone){
+    fetch(SUPA_URL + '/rest/v1/charges?on_conflict=user_phone,exercice', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({user_phone: String(userData.phone), exercice: ex, kg: val, prev_kg: prev?prev.kg:null})
+    }).then(r=>{ if(!r.ok) r.text().then(t=>console.error('Charge sync failed:',t)); })
+      .catch(e=>console.error('Charge sync error:',e));
+  }
 }
 
 function renderCharges(){
@@ -2389,13 +2402,26 @@ function addPoidsEntry(){
   if(!val||val<20||val>300){alert('Poids invalide');return;}
   if(!userData.poidsHistory) userData.poidsHistory = {};
   userData.poidsHistory[mois] = val;
-  // Update current weight with latest entry
   const entries = Object.entries(userData.poidsHistory).sort((a,b)=>parseInt(a[0])-parseInt(b[0]));
   userData.poids = entries[entries.length-1][1];
   document.getElementById('prof-poids').value = userData.poids;
   saveUser();
   updateStats();
   document.getElementById('poids-mois-val').value='';
+  if(userData.phone){
+    const annee = new Date().getFullYear();
+    fetch(SUPA_URL + '/rest/v1/poids_history?on_conflict=user_phone,mois,annee', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({user_phone: String(userData.phone), mois: mois, annee: annee, poids: val})
+    }).then(r=>{ if(!r.ok) r.text().then(t=>console.error('Poids sync failed:',t)); })
+      .catch(e=>console.error('Poids sync error:',e));
+  }
 }
 
 function renderPoidsChart(){
