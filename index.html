@@ -862,23 +862,23 @@ input[type=range]::-webkit-slider-thumb{
   background:var(--ink3);border:1px solid var(--wire);
   border-radius:16px;padding:14px;margin-bottom:8px;
 }
-.charge-inputs{display:flex;gap:8px;margin-top:10px}
+.charge-inputs{display:flex;gap:6px;margin-top:10px;align-items:center}
 .charge-select{
-  flex:2;background:var(--ink4);border:1px solid var(--wire);
-  border-radius:10px;padding:9px 10px;color:var(--snow);
-  font-size:13px;outline:none;
+  flex:1;min-width:0;background:var(--ink4);border:1px solid var(--wire);
+  border-radius:10px;padding:9px 6px;color:var(--snow);
+  font-size:12px;outline:none;overflow:hidden;text-overflow:ellipsis;
 }
 .charge-select option{background:var(--ink)}
 .charge-num{
-  flex:1;background:var(--ink4);border:1px solid var(--wire);
-  border-radius:10px;padding:9px 10px;color:var(--snow);
-  font-size:14px;outline:none;font-family:'DM Sans',sans-serif;
+  width:60px;flex-shrink:0;background:var(--ink4);border:1px solid var(--wire);
+  border-radius:10px;padding:9px 6px;color:var(--snow);
+  font-size:14px;outline:none;font-family:'DM Sans',sans-serif;text-align:center;
 }
 .charge-btn{
   background:var(--lime);color:var(--ink);border:none;
-  border-radius:10px;padding:9px 14px;
-  font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:0.5px;
-  cursor:pointer;
+  border-radius:10px;padding:9px 12px;
+  font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:0.5px;
+  cursor:pointer;flex-shrink:0;white-space:nowrap;
 }
 .charge-item{
   display:flex;justify-content:space-between;align-items:center;
@@ -920,6 +920,20 @@ input[type=range]::-webkit-slider-thumb{
 .mc-val{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--snow);letter-spacing:0.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mc-barcode-wrap{text-align:center}
 .mc-id-text{font-size:11px;color:var(--ash);letter-spacing:3px;margin-top:4px;font-family:monospace}
+
+/* TOAST NOTIFICATION */
+.toast{
+  position:fixed;top:20px;left:50%;transform:translateX(-50%);
+  background:var(--ink3);border:1px solid var(--wire);
+  border-radius:12px;padding:12px 20px;
+  font-size:13px;color:var(--snow);
+  z-index:99999;text-align:center;
+  animation:fadeUp 0.3s ease;
+  max-width:300px;width:90%;
+  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+}
+.toast.error{border-color:var(--danger);color:var(--danger)}
+.toast.success{border-color:var(--lime);color:var(--lime)}
 
 /* MISC */
 .divider{height:1px;background:var(--wire);margin:16px 20px}
@@ -1878,7 +1892,7 @@ async function doLogin(){
   if(found){
     showMain();
   } else {
-    alert('Numéro introuvable. Crée un nouveau compte. — الرقم غير موجود');
+    showToast('Numéro introuvable — الرقم غير موجود<br>Crée un nouveau compte');
     backToChoice();
   }
 }
@@ -1896,11 +1910,11 @@ async function goToQcm(){
   const dob = document.getElementById('inp-dob').value;
   const taille = document.getElementById('inp-taille').value;
   const poids = document.getElementById('inp-poids').value;
-  if(name.length < 3){alert('Nom trop court — الاسم قصير');return;}
+  if(name.length < 3){showToast('Nom trop court — الاسم قصير (min 3 caractères)');return;}
   const phoneClean = phone.replace(/\D/g,'');
-  if(phoneClean.length !== 8){alert('Numéro invalide — 8 chiffres requis\nرقم غير صحيح');return;}
+  if(phoneClean.length !== 8){showToast('Numéro invalide — 8 chiffres requis<br>رقم غير صحيح');return;}
   if(!dob||!selectedSex||!taille||!poids){
-    alert('Merci de remplir tous les champs — يرجى ملء جميع الحقول');return;
+    showToast('Merci de remplir tous les champs<br>يرجى ملء جميع الحقول');return;
   }
   // Check if user already exists in cloud
   const btn = document.querySelector('#screen-login .btn-primary');
@@ -2949,6 +2963,17 @@ function confirmLogout(){
   localStorage.removeItem('fitland_user');
   userData = {};
   location.reload();
+}
+
+function showToast(msg, type='error'){
+  const old = document.getElementById('app-toast');
+  if(old) old.remove();
+  const t = document.createElement('div');
+  t.id = 'app-toast';
+  t.className = 'toast ' + type;
+  t.innerHTML = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3500);
 }
 </script>
 </body>
