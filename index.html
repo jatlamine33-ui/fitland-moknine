@@ -2056,8 +2056,12 @@ async function goToQcm(){
   const exists = await loadFromCloud(phone);
   if(btn){ btn.textContent='COMMENCER — ابدأ'; btn.style.opacity='1'; }
   if(exists){
-    // User found in cloud - go directly to app
-    showMain();
+    // User found in cloud - show message and redirect to login
+    showToast('Ce numéro est déjà inscrit — سجّل الدخول عوضاً 👇', 'error');
+    setTimeout(() => {
+      switchScreen('login');
+      document.getElementById('inp-login-phone').value = phone;
+    }, 2000);
     return;
   }
   // New user - go through QCM
