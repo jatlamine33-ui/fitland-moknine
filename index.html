@@ -1896,7 +1896,10 @@ async function goToQcm(){
   const dob = document.getElementById('inp-dob').value;
   const taille = document.getElementById('inp-taille').value;
   const poids = document.getElementById('inp-poids').value;
-  if(!name||!phone||!dob||!selectedSex||!taille||!poids){
+  if(name.length < 3){alert('Nom trop court — الاسم قصير');return;}
+  const phoneClean = phone.replace(/\D/g,'');
+  if(phoneClean.length !== 8){alert('Numéro invalide — 8 chiffres requis\nرقم غير صحيح');return;}
+  if(!dob||!selectedSex||!taille||!poids){
     alert('Merci de remplir tous les champs — يرجى ملء جميع الحقول');return;
   }
   // Check if user already exists in cloud
@@ -2934,7 +2937,9 @@ if('serviceWorker' in navigator){
 
 // ===== LOGOUT =====
 function logoutUser(){
-  const m=document.getElementById('custom-modal'); if(m){m.style.display='flex';m.style.alignItems='center';m.style.justifyContent='center';}
+  var m=document.getElementById('custom-modal');
+  if(m){m.setAttribute('style','display:flex!important;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:99999;align-items:center;justify-content:center;padding:24px');}
+}
 }
 function closeModal(){
   document.getElementById('custom-modal').style.display='none';
