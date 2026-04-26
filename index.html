@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0a0a0a">
@@ -106,15 +106,23 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
 }
 
 /* ══════ LOGIN ══════ */
-#screen-login{background:var(--ink);position:relative;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#screen-login{
+  background:var(--ink);position:relative;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;
+  min-height:100%;
+}
 .login-bg-grid{
   position:absolute;inset:0;
   background-image:linear-gradient(var(--wire) 1px,transparent 1px),linear-gradient(90deg,var(--wire) 1px,transparent 1px);
   background-size:32px 32px;opacity:0.2;
+  pointer-events:none;
 }
 .login-hero-section{
-  flex:1;display:flex;align-items:center;justify-content:center;
-  position:relative;padding:40px 24px 0;
+  flex:0 0 auto;
+  min-height:200px;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;padding:40px 24px 20px;
 }
 .login-hero-text{
   font-family:'Bebas Neue',sans-serif;
@@ -134,9 +142,10 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
 .login-sheet{
   background:var(--ink2);
   border-radius:28px 28px 0 0;
-  padding:28px 24px 40px;
+  padding:28px 24px calc(40px + env(safe-area-inset-bottom, 0px));
   border-top:1px solid var(--wire);
   position:relative;z-index:2;
+  margin-top:auto;
 }
 .login-sheet::before{
   content:'';
