@@ -635,6 +635,12 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
 
 /* ABO STATUS */
 .abo-ok{background:rgba(52,199,89,0.1);border:1px solid rgba(52,199,89,0.3);border-radius:12px;padding:10px 14px;font-size:12px;color:var(--safe)}
+.toggle-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#444;border-radius:24px;transition:.3s}
+.toggle-slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s}
+.toggle-switch input:checked + .toggle-slider{background:var(--lime)}
+.toggle-switch input:checked + .toggle-slider:before{transform:translateX(20px)}
 .abo-warn{background:rgba(255,159,10,0.1);border:1px solid rgba(255,159,10,0.3);border-radius:12px;padding:10px 14px;font-size:12px;color:var(--warn)}
 .abo-danger{background:rgba(255,59,48,0.1);border:1px solid rgba(255,59,48,0.3);border-radius:12px;padding:10px 14px;font-size:12px;color:var(--danger)}
 
@@ -1591,7 +1597,28 @@ input[type=range]::-webkit-slider-thumb{
         <div class="section-label">Abonnement — الاشتراك</div>
         <div class="input-row"><label>Début</label><input type="date" id="prof-abo-start" style="color-scheme:dark;flex:1;background:none;border:none;color:var(--snow);font-size:14px;outline:none" onchange="saveProfile()"></div>
         <div class="input-row"><label>Durée</label><select id="prof-abo-dur" onchange="saveProfile()"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12">12 mois</option></select></div>
+        <div class="input-row"><label>Type</label><select id="prof-abo-type" onchange="saveProfile()" style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--snow);font-size:14px;padding:6px 8px">
+          <option value="acces-total">Accès Total (Salle + Cours)</option>
+          <option value="fitness">Fitness (Salle uniquement)</option>
+          <option value="cours-matin">Cours Matinal (09h)</option>
+          <option value="cours-apres-midi">Cours Après-midi</option>
+          <option value="kids">Kids Cours</option>
+        </select></div>
         <div id="abo-status" style="display:none;margin-top:4px"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">🔔 Notifications — الإشعارات</div>
+        <div id="notif-permission-banner" style="display:none;background:rgba(163,230,53,0.12);border:1px solid rgba(163,230,53,0.3);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--lime)">
+          Activez les notifications pour recevoir les rappels de cours et d'abonnement.<br>
+          <button onclick="demanderPermissionNotif()" style="margin-top:8px;background:var(--lime);color:#000;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Activer les notifications</button>
+        </div>
+        <div id="notif-granted-info" style="display:none;background:rgba(163,230,53,0.08);border:1px solid rgba(163,230,53,0.2);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:var(--ash)">✅ Notifications activées</div>
+        <div class="input-row" style="justify-content:space-between">
+          <label style="flex:1">📅 Rappel cours du jour</label>
+          <label class="toggle-switch"><input type="checkbox" id="notif-cours" onchange="saveProfile()"><span class="toggle-slider"></span></label>
+        </div>
+        <button onclick="testerNotification()" style="width:100%;margin-top:8px;background:rgba(163,230,53,0.1);border:1px solid rgba(163,230,53,0.3);border-radius:10px;color:var(--lime);font-size:12px;padding:8px;cursor:pointer">🔔 Tester une notification</button>
       </div>
 
       <div class="section">
@@ -1882,6 +1909,10 @@ async function syncToCloud() {
         poids: userData.poids ? parseFloat(userData.poids) : null,
         abo_start: userData.aboStart||null,
         abo_dur: userData.aboDur ? parseInt(userData.aboDur) : null,
+        abo_type: userData.aboType||null,
+        notif_cours: userData.notifCours ? true : false,
+        notif_abo: userData.notifAbo ? true : false,
+        notif_anniv: userData.notifAnniv ? true : false,
         updated_at: new Date().toISOString()
       })
     });
@@ -1917,6 +1948,10 @@ async function loadFromCloud(phone) {
       sexe: user.sexe, taille: user.taille, objectif: user.objectif,
       niveau: user.niveau, frequence: user.frequence, poids: user.poids,
       aboStart: user.abo_start, aboDur: user.abo_dur,
+      aboType: user.abo_type||'acces-total',
+      notifCours: user.notif_cours !== false,
+      notifAbo: true,
+      notifAnniv: true,
     };
     const poidsRes = await fetch(SUPA_URL + '/rest/v1/poids_history?user_phone=eq.' + encodeURIComponent(String(phone)), {
       headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY}
@@ -2088,6 +2123,15 @@ function updateProfileDisplay(){
   if(userData.objectif) document.getElementById('prof-objectif').value=userData.objectif;
   if(userData.aboStart){ const el=document.getElementById('prof-abo-start'); if(el) el.value=userData.aboStart; }
   if(userData.aboDur){ const el=document.getElementById('prof-abo-dur'); if(el) el.value=userData.aboDur; }
+  const atEl = document.getElementById('prof-abo-type');
+  if(atEl && userData.aboType) atEl.value=userData.aboType;
+  const ncEl = document.getElementById('notif-cours');
+  if(ncEl) ncEl.checked = userData.notifCours !== false;
+  // Forcer abo et anniv à true
+  userData.notifAbo = true;
+  userData.notifAnniv = true;
+  // Vérifier l'état des permissions notifications
+  verifierEtatNotifications();
   updateAboStatus();
   renderCharges();
   const freq = userData.frequence ? parseInt(userData.frequence) : 3;
@@ -2130,6 +2174,15 @@ function saveProfile(){
   const aboDur = document.getElementById('prof-abo-dur');
   if(aboStart) userData.aboStart = aboStart.value;
   if(aboDur) userData.aboDur = aboDur.value;
+  const aboType = document.getElementById('prof-abo-type');
+  if(aboType) userData.aboType = aboType.value;
+  const notifCours = document.getElementById('notif-cours');
+  if(notifCours) userData.notifCours = notifCours.checked;
+  // Abo et anniv toujours actifs
+  userData.notifAbo = true;
+  userData.notifAnniv = true;
+  // Reprogrammer les notifications
+  planifierNotificationsApp();
   saveUser();
   updateStats();
   updateGoalBadge();
@@ -3063,6 +3116,76 @@ if('serviceWorker' in navigator){
       .catch(e=>console.log('SW error:', e));
   });
 }
+
+// ===== NOTIFICATIONS =====
+function verifierEtatNotifications() {
+  if(!('Notification' in window)) return;
+  const banner = document.getElementById('notif-permission-banner');
+  const granted = document.getElementById('notif-granted-info');
+  if(Notification.permission === 'granted') {
+    if(banner) banner.style.display = 'none';
+    if(granted) granted.style.display = 'block';
+  } else if(Notification.permission === 'denied') {
+    if(banner) banner.style.display = 'none';
+    if(granted) granted.style.display = 'none';
+  } else {
+    if(banner) banner.style.display = 'block';
+    if(granted) granted.style.display = 'none';
+  }
+}
+
+async function demanderPermissionNotif() {
+  if(!('Notification' in window)) {
+    alert('Les notifications ne sont pas supportées sur ce navigateur.');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  verifierEtatNotifications();
+  if(perm === 'granted') {
+    planifierNotificationsApp();
+  }
+}
+
+function planifierNotificationsApp() {
+  if(!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  if(Notification.permission !== 'granted') return;
+  navigator.serviceWorker.controller.postMessage({
+    type: 'SCHEDULE_NOTIFS',
+    aboType: userData.aboType || 'acces-total',
+    notifCours: userData.notifCours !== false,
+    notifAbo: userData.notifAbo !== false,
+    notifAnniv: userData.notifAnniv !== false,
+    aboStart: userData.aboStart || null,
+    aboDur: userData.aboDur || null,
+    dob: userData.dob || null,
+    nom: userData.name || 'Membre'
+  });
+}
+
+function testerNotification() {
+  if(Notification.permission !== 'granted') {
+    demanderPermissionNotif();
+    return;
+  }
+  if(navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({type: 'TEST_NOTIF'});
+  } else {
+    // Fallback sans SW
+    new Notification('💪 Fitland — Test', {
+      body: '"La douleur d\'aujourd\'hui est la force de demain"\nألم اليوم قوة الغد\n\n📋 Test cours :\n• 09h00 — Morning Fitness',
+      icon: '/icon-192.png'
+    });
+  }
+}
+
+// Lancer la planification au chargement si permission déjà accordée
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    if(Notification.permission === 'granted') {
+      planifierNotificationsApp();
+    }
+  }, 3000);
+});
 
 // ===== LOGOUT =====
 function logoutUser(){
