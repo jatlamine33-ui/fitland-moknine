@@ -246,7 +246,16 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
 .qcm-dot{flex:1;height:3px;background:var(--wire);border-radius:2px;transition:background 0.4s}
 .qcm-dot.done{background:var(--lime)}
 .qcm-step{display:none}
-.qcm-step.active{display:block;animation:fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both}
+.qcm-step.active{display:block;animation:qcmSlideIn 0.45s cubic-bezier(0.16,1,0.3,1) both}
+.qcm-step.exiting{animation:qcmSlideOut 0.2s cubic-bezier(0.4,0,1,1) both}
+@keyframes qcmSlideIn{
+  0%{opacity:0;transform:translateX(30px)}
+  100%{opacity:1;transform:translateX(0)}
+}
+@keyframes qcmSlideOut{
+  0%{opacity:1;transform:translateX(0)}
+  100%{opacity:0;transform:translateX(-30px)}
+}
 .qcm-num{font-size:11px;color:var(--lime);letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}
 .qcm-q{font-family:'Bebas Neue',sans-serif;font-size:36px;line-height:1;margin-bottom:6px;color:var(--snow)}
 .qcm-q-ar{font-size:16px;color:var(--ash);direction:rtl;text-align:right;margin-bottom:28px}
@@ -264,6 +273,12 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
 .qcm-opt.selected{
   border-color:var(--lime);
   background:var(--lime-dim);
+  animation:qcmPulse 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes qcmPulse{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.03);box-shadow:0 0 0 4px rgba(200,255,0,0.15)}
+  100%{transform:scale(1);box-shadow:0 0 0 0 rgba(200,255,0,0)}
 }
 .qcm-opt-icon{
   width:44px;height:44px;
@@ -1151,7 +1166,7 @@ input[type=range]::-webkit-slider-thumb{
           <div><div class="qcm-opt-fr">Améliorer l'endurance</div><div class="qcm-opt-ar">تحسين التحمل</div></div>
         </div>
       </div>
-      <button class="btn-primary qcm-next" id="qbtn-1" onclick="nextQcm(2)" style="opacity:0.3;pointer-events:none;margin-top:24px">SUIVANT →</button>
+      <button class="btn-primary qcm-next" id="qbtn-1" onclick="nextQcm(2)" style="display:none">SUIVANT →</button>
     </div>
     <div class="qcm-step" id="qstep-2">
       <div class="qcm-num">Question 02 / 03</div>
@@ -1171,7 +1186,7 @@ input[type=range]::-webkit-slider-thumb{
           <div><div class="qcm-opt-fr">Avancé — plus d'un an</div><div class="qcm-opt-ar">متقدم — أكثر من سنة</div></div>
         </div>
       </div>
-      <button class="btn-primary qcm-next" id="qbtn-2" onclick="nextQcm(3)" style="opacity:0.3;pointer-events:none;margin-top:24px">SUIVANT →</button>
+      <button class="btn-primary qcm-next" id="qbtn-2" onclick="nextQcm(3)" style="display:none">SUIVANT →</button>
     </div>
     <div class="qcm-step" id="qstep-3">
       <div class="qcm-num">Question 03 / 03</div>
@@ -1191,7 +1206,7 @@ input[type=range]::-webkit-slider-thumb{
           <div><div class="qcm-opt-fr">4 fois et plus</div><div class="qcm-opt-ar">4 مرات أو أكثر</div></div>
         </div>
       </div>
-      <button class="btn-primary qcm-next" id="qbtn-3" onclick="finishQcm()" style="opacity:0.3;pointer-events:none;margin-top:24px">TERMINER ✓</button>
+      <button class="btn-primary qcm-next" id="qbtn-3" onclick="finishQcm()" style="display:none">TERMINER ✓</button>
     </div>
   </div>
 </div>
@@ -2154,18 +2169,39 @@ async function goToQcm(){
 }
 
 // ===== QCM =====
+let qcmTransitioning = false;
 function selectQcm(q, el, val){
+  if(qcmTransitioning) return; // prevent double-tap during transition
   el.closest('.qcm-options').querySelectorAll('.qcm-opt').forEach(o=>o.classList.remove('selected'));
   el.classList.add('selected');
   qcmAnswers['q'+q] = val;
-  const btn = document.getElementById('qbtn-'+q);
-  btn.style.opacity='1';
-  btn.style.pointerEvents='auto';
+  // Haptic feedback
+  if(navigator.vibrate) navigator.vibrate(15);
+  // Auto-advance after short delay so user sees their selection
+  qcmTransitioning = true;
+  setTimeout(() => {
+    if(q < 3){
+      nextQcm(q + 1);
+    } else {
+      finishQcm();
+    }
+    qcmTransitioning = false;
+  }, 350);
 }
 function nextQcm(next){
-  document.querySelectorAll('.qcm-step').forEach(s=>s.classList.remove('active'));
-  document.getElementById('qstep-'+next).classList.add('active');
-  document.getElementById('qdot-'+next).classList.add('done');
+  const current = document.querySelector('.qcm-step.active');
+  const target = document.getElementById('qstep-'+next);
+  if(current){
+    current.classList.add('exiting');
+    setTimeout(() => {
+      current.classList.remove('active','exiting');
+      target.classList.add('active');
+      document.getElementById('qdot-'+next).classList.add('done');
+    }, 200);
+  } else {
+    target.classList.add('active');
+    document.getElementById('qdot-'+next).classList.add('done');
+  }
 }
 function finishQcm(){
   userData.objectif = qcmAnswers.q1||'';
