@@ -142,7 +142,7 @@ body{font-family:'DM Sans',sans-serif;color:var(--snow)}
 .login-sheet{
   background:var(--ink2);
   border-radius:28px 28px 0 0;
-  padding:28px 24px calc(40px + env(safe-area-inset-bottom, 0px));
+  padding:28px 24px calc(80px + env(safe-area-inset-bottom, 0px));
   border-top:1px solid var(--wire);
   position:relative;z-index:2;
   margin-top:auto;
@@ -936,19 +936,75 @@ input[type=range]::-webkit-slider-thumb{
 .mc-barcode-wrap{text-align:center}
 .mc-id-text{font-size:11px;color:var(--ash);letter-spacing:3px;margin-top:4px;font-family:monospace}
 
-/* TOAST NOTIFICATION */
-.toast{
-  position:fixed;top:20px;left:50%;transform:translateX(-50%);
-  background:var(--ink3);border:1px solid var(--wire);
-  border-radius:12px;padding:12px 20px;
-  font-size:13px;color:var(--snow);
-  z-index:99999;text-align:center;
-  animation:fadeUp 0.3s ease;
-  max-width:300px;width:90%;
-  box-shadow:0 4px 20px rgba(0,0,0,0.5);
+/* TOAST NOTIFICATION — modern */
+#toast-container{
+  position:fixed;
+  top:calc(20px + env(safe-area-inset-top, 0px));
+  left:0;right:0;
+  z-index:99999;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  pointer-events:none;
+  padding:0 16px;
 }
-.toast.error{border-color:var(--danger);color:var(--danger)}
-.toast.success{border-color:var(--lime);color:var(--lime)}
+.toast{
+  pointer-events:auto;
+  background:rgba(20,20,20,0.92);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid var(--wire);
+  border-radius:16px;
+  padding:14px 16px;
+  display:flex;align-items:center;gap:12px;
+  max-width:380px;width:100%;
+  box-shadow:0 10px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  cursor:pointer;
+  position:relative;overflow:hidden;
+  animation:toastIn 0.4s cubic-bezier(0.16,1,0.3,1);
+  transform-origin:top center;
+}
+.toast.hide{animation:toastOut 0.3s cubic-bezier(0.4,0,1,1) forwards}
+.toast-icon{
+  width:36px;height:36px;flex-shrink:0;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:700;
+}
+.toast-body{
+  flex:1;min-width:0;
+  font-size:13px;line-height:1.4;
+  color:var(--snow);
+}
+.toast-body b{display:block;font-size:14px;margin-bottom:2px;font-weight:700}
+.toast-body .ar{display:block;direction:rtl;font-size:12px;color:var(--ash);margin-top:2px}
+.toast-progress{
+  position:absolute;bottom:0;left:0;height:2px;
+  border-radius:0 0 16px 16px;
+  animation:toastProgress 4s linear forwards;
+}
+.toast.error{border-color:rgba(239,68,68,0.4)}
+.toast.error .toast-icon{background:rgba(239,68,68,0.15);color:#ef4444}
+.toast.error .toast-progress{background:#ef4444}
+.toast.success{border-color:rgba(204,255,0,0.4)}
+.toast.success .toast-icon{background:rgba(204,255,0,0.15);color:var(--lime)}
+.toast.success .toast-progress{background:var(--lime)}
+.toast.info{border-color:rgba(96,165,250,0.4)}
+.toast.info .toast-icon{background:rgba(96,165,250,0.15);color:#60a5fa}
+.toast.info .toast-progress{background:#60a5fa}
+.toast.warning{border-color:rgba(251,191,36,0.4)}
+.toast.warning .toast-icon{background:rgba(251,191,36,0.15);color:#fbbf24}
+.toast.warning .toast-progress{background:#fbbf24}
+@keyframes toastIn{
+  0%{opacity:0;transform:translateY(-30px) scale(0.9)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
+}
+@keyframes toastOut{
+  0%{opacity:1;transform:translateY(0) scale(1)}
+  100%{opacity:0;transform:translateY(-20px) scale(0.95)}
+}
+@keyframes toastProgress{
+  0%{width:100%}
+  100%{width:0%}
+}
 
 /* MISC */
 .divider{height:1px;background:var(--wire);margin:16px 20px}
@@ -1948,6 +2004,10 @@ async function loadFromCloud(phone) {
         'Authorization': 'Bearer ' + SUPA_KEY
       }
     });
+    if(!res.ok) {
+      console.error('Supabase error:', res.status);
+      return 'error';
+    }
     const users = await res.json();
     if(!users || users.length === 0) return false;
     const user = users[0];
@@ -1982,7 +2042,7 @@ async function loadFromCloud(phone) {
     return true;
   } catch(e) {
     console.error('Load error:', e.message);
-    return false;
+    return 'error';
   }
 }
 
@@ -2026,16 +2086,20 @@ function backToChoice(){
   document.getElementById('v-choice').style.display='block';
 }
 async function doLogin(){
-  const phone = document.getElementById('inp-login-phone').value.trim();
-  if(!phone){ alert('Entre ton numéro — أدخل رقم هاتفك'); return; }
+  const phone = document.getElementById('inp-login-phone').value.trim().replace(/\D/g,'');
+  if(!phone){ showToast('Entre ton numéro<br><span class="ar">أدخل رقم هاتفك</span>', 'warning'); return; }
+  if(phone.length !== 8){ showToast('Numéro invalide — 8 chiffres requis<br>رقم غير صحيح'); return; }
   const btn = document.querySelector('#v-login .btn-primary');
   if(btn){ btn.textContent='Connexion...'; btn.style.opacity='0.7'; }
   const found = await loadFromCloud(phone);
   if(btn){ btn.textContent='SE CONNECTER — دخول'; btn.style.opacity='1'; }
-  if(found){
+  if(found === true){
+    showToast('<b>Connexion réussie ✓</b>Bienvenue !<span class="ar">مرحبا بك</span>', 'success', 2500);
     showMain();
+  } else if(found === 'error'){
+    showToast('<b>Service indisponible</b>Réessaie dans quelques minutes<span class="ar">الخدمة غير متاحة — حاول لاحقاً</span>', 'error', 5000);
   } else {
-    showToast('Numéro introuvable — الرقم غير موجود<br>Crée un nouveau compte');
+    showToast('<b>Numéro introuvable</b>Crée un nouveau compte<span class="ar">الرقم غير مسجل</span>', 'warning');
     backToChoice();
   }
 }
@@ -2049,26 +2113,29 @@ function selectSex(val, el){
 }
 async function goToQcm(){
   const name = document.getElementById('inp-name').value.trim();
-  const phone = document.getElementById('inp-phone').value.trim();
+  const phone = document.getElementById('inp-phone').value.trim().replace(/\D/g,'');
   const dob = document.getElementById('inp-dob').value;
   const taille = document.getElementById('inp-taille').value;
   const poids = document.getElementById('inp-poids').value;
-  if(name.length < 3){showToast('Nom trop court — الاسم قصير (min 3 caractères)');return;}
-  const phoneClean = phone.replace(/\D/g,'');
-  if(phoneClean.length !== 8){showToast('Numéro invalide — 8 chiffres requis<br>رقم غير صحيح');return;}
+  if(name.length < 3){showToast('<b>Nom trop court</b>Minimum 3 caractères<span class="ar">الاسم قصير جداً</span>', 'warning');return;}
+  if(phone.length !== 8){showToast('<b>Numéro invalide</b>8 chiffres requis<span class="ar">رقم غير صحيح</span>', 'warning');return;}
   if(!dob||!selectedSex||!taille||!poids){
-    showToast('Merci de remplir tous les champs<br>يرجى ملء جميع الحقول');return;
+    showToast('<b>Champs manquants</b>Merci de tout remplir<span class="ar">يرجى ملء جميع الحقول</span>', 'warning');return;
   }
   // Check if user already exists in cloud
-  const btn = document.querySelector('#screen-login .btn-primary');
+  const btn = document.querySelector('#v-register .btn-primary');
   if(btn){ btn.textContent='Chargement...'; btn.style.opacity='0.7'; }
   const exists = await loadFromCloud(phone);
   if(btn){ btn.textContent='COMMENCER — ابدأ'; btn.style.opacity='1'; }
-  if(exists){
-    // User found in cloud - show message and redirect to login
-    showToast('Ce numéro est déjà inscrit — سجّل الدخول عوضاً 👇', 'error');
+  if(exists === 'error'){
+    showToast('<b>Service indisponible</b>Réessaie dans quelques minutes<span class="ar">الخدمة غير متاحة — حاول لاحقاً</span>', 'error', 5000);
+    return;
+  }
+  if(exists === true){
+    showToast('<b>Numéro déjà inscrit</b>Connecte-toi à ton compte 👇<span class="ar">سجّل الدخول عوضاً</span>', 'info', 3000);
     setTimeout(() => {
-      switchScreen('login');
+      backToChoice();
+      showLoginForm();
       document.getElementById('inp-login-phone').value = phone;
     }, 2000);
     return;
@@ -2408,7 +2475,7 @@ const MOIS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov
 function addPoidsEntry(){
   const mois = parseInt(document.getElementById('poids-mois-select').value);
   const val = parseFloat(document.getElementById('poids-mois-val').value);
-  if(!val||val<20||val>300){alert('Poids invalide');return;}
+  if(!val||val<20||val>300){showToast('Poids invalide<br><span class="ar">الوزن غير صحيح</span>', 'warning');return;}
   if(!userData.poidsHistory) userData.poidsHistory = {};
   userData.poidsHistory[mois] = val;
   const entries = Object.entries(userData.poidsHistory).sort((a,b)=>parseInt(a[0])-parseInt(b[0]));
@@ -3328,15 +3395,50 @@ window.confirmLogout = function confirmLogout(){
   location.reload();
 }
 
-function showToast(msg, type='error'){
-  const old = document.getElementById('app-toast');
-  if(old) old.remove();
+function showToast(msg, type='error', duration=4000){
+  // Container singleton
+  let container = document.getElementById('toast-container');
+  if(!container){
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  // Icons per type
+  const icons = {
+    error:   '✕',
+    success: '✓',
+    info:    'i',
+    warning: '!'
+  };
+  // Build toast
   const t = document.createElement('div');
-  t.id = 'app-toast';
   t.className = 'toast ' + type;
-  t.innerHTML = msg;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(), 3500);
+  t.innerHTML = `
+    <div class="toast-icon">${icons[type] || icons.info}</div>
+    <div class="toast-body">${msg}</div>
+    <div class="toast-progress" style="animation-duration:${duration}ms"></div>
+  `;
+  container.appendChild(t);
+  // Haptic feedback on mobile for errors/warnings
+  if(navigator.vibrate && (type === 'error' || type === 'warning')){
+    navigator.vibrate(type === 'error' ? [40, 60, 40] : 30);
+  } else if(navigator.vibrate && type === 'success'){
+    navigator.vibrate(20);
+  }
+  // Tap to dismiss
+  const dismiss = () => {
+    if(t._dismissed) return;
+    t._dismissed = true;
+    t.classList.add('hide');
+    setTimeout(() => t.remove(), 300);
+  };
+  t.addEventListener('click', dismiss);
+  // Auto-dismiss
+  setTimeout(dismiss, duration);
+  // Limit to 3 stacked toasts
+  while(container.children.length > 3){
+    container.firstChild.remove();
+  }
 }
 </script>
 </body>
