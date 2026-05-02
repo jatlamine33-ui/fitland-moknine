@@ -59,206 +59,275 @@ const MESSAGES = [
   {fr: "Dépasse tes limites, découvre ton potentiel", ar: "تجاوز حدودك، اكتشف إمكانياتك"}
 ];
 
-// Install - cache de base
+// ===== LOGIQUE DE NOTIFICATIONS =====
+// On n'utilise PAS setTimeout (tués par Android/iOS en arrière-plan)
+// On utilise : periodicsync, sync, fetch event, et vérification au réveil
+
+// ---- Install ----
 self.addEventListener('install', e => {
   console.log('[SW] Installed');
   self.skipWaiting();
 });
 
+// ---- Activate ----
 self.addEventListener('activate', e => {
   console.log('[SW] Activated');
-  e.waitUntil(clients.claim());
-  // Planifier les notifications au démarrage
-  scheduleNotifications();
+  e.waitUntil(
+    clients.claim().then(() => {
+      // Vérifier les notifications dès l'activation
+      return verifierEtEnvoyerNotifs();
+    })
+  );
 });
 
-// Message depuis l'app principale
+// ---- Periodic Sync (Android Chrome, si supporté) ----
+// Permet au SW de se réveiller périodiquement même app fermée
+self.addEventListener('periodicsync', e => {
+  console.log('[SW] Periodic sync:', e.tag);
+  if(e.tag === 'fitland-notifs') {
+    e.waitUntil(verifierEtEnvoyerNotifs());
+  }
+});
+
+// ---- Background Sync (fallback) ----
+self.addEventListener('sync', e => {
+  console.log('[SW] Sync:', e.tag);
+  if(e.tag === 'fitland-check-notifs') {
+    e.waitUntil(verifierEtEnvoyerNotifs());
+  }
+});
+
+// ---- Fetch event : profiter de chaque réveil réseau ----
+self.addEventListener('fetch', e => {
+  // On vérifie les notifs à chaque requête réseau (réveil du SW)
+  verifierEtEnvoyerNotifs().catch(()=>{});
+  // On laisse passer la requête normalement
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+});
+
+// ---- Message depuis l'app ----
 self.addEventListener('message', e => {
   if(e.data && e.data.type === 'SCHEDULE_NOTIFS') {
     const {aboType, notifCours, notifAbo, notifAnniv, aboStart, aboDur, dob, nom} = e.data;
-    // Stocker les préférences
     self.userData = {aboType, notifCours, notifAbo, notifAnniv, aboStart, aboDur, dob, nom};
-    scheduleNotifications();
+    // Sauvegarder dans le cache pour persister entre les réveils
+    sauvegarderUserData(self.userData);
+    verifierEtEnvoyerNotifs();
   }
   if(e.data && e.data.type === 'TEST_NOTIF') {
     showTestNotif(e.data);
   }
 });
 
-// Planifier toutes les notifications
-function scheduleNotifications() {
-  // Annuler les anciens timers si possible
-  if(self._timerCours) clearTimeout(self._timerCours);
-  if(self._timerAbo) clearTimeout(self._timerAbo);
-  if(self._timerAnniv) clearTimeout(self._timerAnniv);
+// ---- Persistance des données utilisateur dans le cache ----
+async function sauvegarderUserData(data) {
+  try {
+    const cache = await caches.open('fitland-userdata-v1');
+    const response = new Response(JSON.stringify(data));
+    await cache.put('/fitland-userdata', response);
+  } catch(e) { console.warn('[SW] Sauvegarde userData échouée:', e); }
+}
+
+async function chargerUserData() {
+  try {
+    const cache = await caches.open('fitland-userdata-v1');
+    const response = await cache.match('/fitland-userdata');
+    if(response) {
+      const data = await response.json();
+      self.userData = data;
+      return data;
+    }
+  } catch(e) { console.warn('[SW] Chargement userData échoué:', e); }
+  return null;
+}
+
+// ---- Clé pour éviter les doublons : stocker les notifs déjà envoyées ----
+async function getNotifsSentToday() {
+  try {
+    const cache = await caches.open('fitland-notifs-sent-v1');
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const response = await cache.match('/notifs-sent-' + today);
+    if(response) return await response.json();
+  } catch(e) {}
+  return {};
+}
+
+async function marquerNotifEnvoyee(key) {
+  try {
+    const cache = await caches.open('fitland-notifs-sent-v1');
+    const today = new Date().toISOString().slice(0, 10);
+    const sent = await getNotifsSentToday();
+    sent[key] = true;
+    await cache.put('/notifs-sent-' + today, new Response(JSON.stringify(sent)));
+    // Nettoyer les vieux jours (garder seulement aujourd'hui)
+    const keys = await cache.keys();
+    for(const req of keys) {
+      if(!req.url.includes(today)) await cache.delete(req);
+    }
+  } catch(e) {}
+}
+
+// ---- Fonction principale : vérifier et envoyer les notifs ----
+async function verifierEtEnvoyerNotifs() {
+  // Charger les données si pas en mémoire
+  if(!self.userData) {
+    await chargerUserData();
+  }
+  const userData = self.userData;
+  if(!userData) return; // Pas de profil configuré
 
   const now = new Date();
-  
-  // Notification cours 07h30 (matin) - demain si déjà passé aujourd'hui
-  planifierNotifCours(7, 30, 'matin', now);
-  
-  // Notification cours 14h00 (après-midi)
-  planifierNotifCours(14, 0, 'apres-midi', now);
-  
-  // Vérifier abo et anniv chaque jour à 09h00
-  planifierVerifQuotidienne(now);
-}
+  const jourIndex = now.getDay();
+  const heure = now.getHours();
+  const minute = now.getMinutes();
+  const totalMinutes = heure * 60 + minute;
 
-function planifierNotifCours(heure, minute, session, now) {
-  const cible = new Date(now);
-  cible.setHours(heure, minute, 0, 0);
-  
-  // Si déjà passé aujourd'hui, viser demain
-  if(cible <= now) {
-    cible.setDate(cible.getDate() + 1);
+  const sent = await getNotifsSentToday();
+
+  // === 1. Notif cours du MATIN (7h30 → 8h30) ===
+  if(userData.notifCours && !sent['cours-matin'] && totalMinutes >= 450 && totalMinutes < 510) {
+    const envoyee = await envoyerNotifCours('matin', now, userData);
+    if(envoyee) await marquerNotifEnvoyee('cours-matin');
   }
-  
-  const delai = cible.getTime() - now.getTime();
-  
-  const timer = setTimeout(() => {
-    envoyerNotifCours(session, cible);
-    // Re-planifier pour le lendemain
-    const prochaine = new Date(cible);
-    prochaine.setDate(prochaine.getDate() + 1);
-    const delaiSuivant = prochaine.getTime() - new Date().getTime();
-    setTimeout(() => planifierNotifCours(heure, minute, session, new Date()), delaiSuivant);
-  }, delai);
-  
-  if(session === 'matin') self._timerCours = timer;
+
+  // === 2. Notif cours de l'APRÈS-MIDI (14h00 → 15h00) ===
+  if(userData.notifCours && !sent['cours-aprem'] && totalMinutes >= 840 && totalMinutes < 900) {
+    const envoyee = await envoyerNotifCours('apres-midi', now, userData);
+    if(envoyee) await marquerNotifEnvoyee('cours-aprem');
+  }
+
+  // === 3. Notif abonnement J-7 et J-3 (entre 9h et 10h) ===
+  if(userData.notifAbo && userData.aboStart && userData.aboDur && !sent['abo'] && totalMinutes >= 540 && totalMinutes < 600) {
+    await verifierAbonnement(userData);
+    await marquerNotifEnvoyee('abo');
+  }
+
+  // === 4. Notif anniversaire (entre 9h et 10h) ===
+  if(userData.notifAnniv && userData.dob && !sent['anniv'] && totalMinutes >= 540 && totalMinutes < 600) {
+    await verifierAnniversaire(userData, now);
+    await marquerNotifEnvoyee('anniv');
+  }
 }
 
-function planifierVerifQuotidienne(now) {
-  const cible = new Date(now);
-  cible.setHours(9, 0, 0, 0);
-  if(cible <= now) cible.setDate(cible.getDate() + 1);
-  
-  const delai = cible.getTime() - now.getTime();
-  self._timerAbo = setTimeout(() => {
-    verifierAboEtAnniv();
-    // Re-planifier pour demain
-    planifierVerifQuotidienne(new Date());
-  }, delai);
-}
-
-function envoyerNotifCours(session, date) {
-  const userData = self.userData || {};
-  if(!userData.notifCours) return; // désactivé
-  
+// ---- Envoyer notif cours ----
+async function envoyerNotifCours(session, date, userData) {
   const aboType = userData.aboType || 'acces-total';
   const jourIndex = date.getDay();
   const coursDuJour = PLANNING[jourIndex] || [];
-  
-  // Filtrer selon type d'abonnement
+
   let coursFiltrés = coursDuJour;
-  if(aboType === 'fitness') {
-    // Pas de cours collectifs
-    return;
-  } else if(aboType === 'cours-matin') {
+  if(aboType === 'fitness') return false;
+  else if(aboType === 'cours-matin') {
     coursFiltrés = coursDuJour.filter(c => c.type === 'matin');
-    if(session === 'apres-midi') return;
+    if(session === 'apres-midi') return false;
   } else if(aboType === 'cours-apres-midi') {
     coursFiltrés = coursDuJour.filter(c => c.type === 'apres-midi');
-    if(session === 'matin') return;
+    if(session === 'matin') return false;
   }
-  
-  if(coursFiltrés.length === 0) return;
-  
-  // Message de motivation du jour
+
+  if(coursFiltrés.length === 0) return false;
+
   const msgIndex = date.getDay() % MESSAGES.length;
   const msg = MESSAGES[msgIndex];
-  
-  const titreSession = session === 'matin' ? 'Cours du matin 🌅' : 'Cours de l\'après-midi 🌞';
-  const titreArabe = session === 'matin' ? 'دروس الصباح' : 'دروس بعد الظهر';
-  
-  // Construire la liste des cours
-  let listeCours = coursFiltrés.map(c => {
-    return `• ${c.heure} — ${c.nom}${c.coach ? ' (' + c.coach + ')' : ''}`;
-  }).join('\n');
-  
+  const titreSession = session === 'matin' ? 'Cours du matin 🌅' : "Cours de l'après-midi 🌞";
+  const listeCours = coursFiltrés.map(c => `• ${c.heure} — ${c.nom}${c.coach ? ' (' + c.coach + ')' : ''}`).join('\n');
   const body = `"${msg.fr}"\n${msg.ar}\n\n📋 Tes cours :\n${listeCours}\n\nOn t'attend ! 💪`;
-  
-  self.registration.showNotification(`💪 Fitland — ${titreSession}`, {
-    body: body,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    tag: `cours-${session}`,
-    renotify: true,
-    requireInteraction: false,
-    vibrate: [200, 100, 200]
+
+  await self.registration.showNotification(`💪 Fitland — ${titreSession}`, {
+    body, icon: '/icon-192.png', badge: '/icon-192.png',
+    tag: `cours-${session}`, renotify: true,
+    requireInteraction: false, vibrate: [200, 100, 200]
   });
+  return true;
 }
 
-function verifierAboEtAnniv() {
-  const userData = self.userData || {};
+// ---- Vérifier abonnement ----
+async function verifierAbonnement(userData) {
   const now = new Date();
-  
-  // Vérifier anniversaire
-  if(userData.notifAnniv && userData.dob) {
-    const dob = new Date(userData.dob);
-    if(dob.getMonth() === now.getMonth() && dob.getDate() === now.getDate()) {
-      const nom = userData.nom || 'Membre';
-      self.registration.showNotification('🎂 Joyeux anniversaire !', {
-        body: `Joyeux anniversaire ${nom} ! 🎉\nميلاد سعيد ! تمنياتنا بالصحة والسعادة\n\nL'équipe Fitland vous souhaite le meilleur 💚`,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
-        tag: 'anniversaire',
-        requireInteraction: true,
-        vibrate: [200, 100, 200, 100, 200]
-      });
-    }
-  }
-  
-  // Vérifier fin d'abonnement
-  if(userData.notifAbo && userData.aboStart && userData.aboDur) {
-    const start = new Date(userData.aboStart);
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + parseInt(userData.aboDur));
-    
-    const diffMs = end.getTime() - now.getTime();
-    const diffJours = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    
-    if(diffJours === 7) {
-      self.registration.showNotification('⚠️ Abonnement — اشتراكك', {
-        body: `اشتراكك ينتهي خلال 7 أيام — جدّد اليوم واستفد من تخفيض 10% 🎁\nVotre abonnement expire dans 7 jours — Renouvelez aujourd'hui !`,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
-        tag: 'abo-expire',
-        requireInteraction: true,
-        vibrate: [200, 100, 200]
-      });
-    } else if(diffJours === 3) {
-      self.registration.showNotification('🚨 Abonnement — اشتراكك', {
-        body: `باقي 3 أيام فقط — لا تفوّت فرصة التخفيض 5% ⚡\nPlus que 3 jours — Ne manquez pas la réduction !`,
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
-        tag: 'abo-expire',
-        requireInteraction: true,
-        vibrate: [200, 100, 200]
-      });
-    }
+  const start = new Date(userData.aboStart);
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + parseInt(userData.aboDur));
+
+  const diffMs = end.getTime() - now.getTime();
+  const diffJours = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if(diffJours === 7) {
+    await self.registration.showNotification('⚠️ Abonnement — اشتراكك', {
+      body: `اشتراكك ينتهي خلال 7 أيام — جدّد اليوم واستفد من تخفيض 10% 🎁\nVotre abonnement expire dans 7 jours — Renouvelez aujourd'hui !`,
+      icon: '/icon-192.png', badge: '/icon-192.png',
+      tag: 'abo-expire-7', requireInteraction: true, vibrate: [200, 100, 200]
+    });
+  } else if(diffJours === 3) {
+    await self.registration.showNotification('🚨 Abonnement — اشتراكك', {
+      body: `اشتراكك ينتهي خلال 3 أيام — جدّد الآن ! 🚨\nVotre abonnement expire dans 3 jours — Renouvelez maintenant !`,
+      icon: '/icon-192.png', badge: '/icon-192.png',
+      tag: 'abo-expire-3', requireInteraction: true, vibrate: [200, 100, 200]
+    });
   }
 }
 
+// ---- Vérifier anniversaire ----
+async function verifierAnniversaire(userData, now) {
+  const dob = new Date(userData.dob);
+  if(dob.getMonth() === now.getMonth() && dob.getDate() === now.getDate()) {
+    const nom = userData.nom || 'Membre';
+    const age = now.getFullYear() - dob.getFullYear();
+    await self.registration.showNotification(`🎂 Joyeux anniversaire ${nom} ! — ميلاد سعيد !`, {
+      body: `🎉 Joyeux anniversaire ${nom} !\nميلاد سعيد يا ${nom} ! 🎉\n\nتمنياتنا بالصحة والسعادة 💚\nL'équipe Fitland vous souhaite le meilleur !\n\n🎁 Cadeau spécial pour toi aujourd'hui :\nSi tu renouvelles ton abonnement aujourd'hui,\ntu bénéficies d'une remise de ${age} % !\n\n🎁 هدية خاصة ليوم ميلادك :\nإذا جدّدت اشتراكك اليوم،\nتستفيد من تخفيض ${age} % !`,
+      icon: '/icon-192.png', badge: '/icon-192.png',
+      tag: 'anniversaire', requireInteraction: true, vibrate: [200, 100, 200, 100, 200]
+    });
+  }
+}
+
+// ---- Fonction test : 5 notifications en séquence ----
 function showTestNotif(data) {
-  const msg = MESSAGES[0];
-  self.registration.showNotification('💪 Fitland — Test Notification', {
-    body: `"${msg.fr}"\n${msg.ar}\n\n📋 Test cours :\n• 09h00 — Morning Fitness (Marwa)\n• 09h30 — BFC (Khawla)\n\nOn t'attend ! 🏋️`,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    tag: 'test',
-    requireInteraction: false,
-    vibrate: [200, 100, 200]
-  });
+  const reg = self.registration;
+  const sendNotif = (title, body, tag, requireInteraction = false, delay = 0) => {
+    setTimeout(() => {
+      reg.showNotification(title, {
+        body, icon: '/icon-192.png', badge: '/icon-192.png',
+        tag: tag + '-' + Date.now(), renotify: false,
+        requireInteraction, vibrate: [200, 100, 200]
+      });
+    }, delay);
+  };
+
+  sendNotif(
+    '💪 Fitland — Cours du matin 🌅',
+    "La douleur d'aujourd'hui est la force de demain\nألم اليوم قوة الغد\n\n📋 Tes cours :\n• 09h00 — Morning Fitness Floor (Marwa)\n• 09h00 — BFC (Khawla)\n\nOn t'attend ! 💪",
+    'test-matin', false, 0
+  );
+  sendNotif(
+    "💪 Fitland — Cours de l'après-midi 🌞",
+    "Sois plus fort que tes excuses\nكن أقوى من أعذارك\n\n📋 Tes cours :\n• 17h30 — Danse Orientale (Tayssir / Marwa)\n• 18h30 — Step 1+ / LIA (Marwa)\n\nOn t'attend ! 💪",
+    'test-aprem', false, 4000
+  );
+  sendNotif(
+    '⚠️ Abonnement — اشتراكك',
+    "اشتراكك ينتهي خلال 7 أيام — جدّد اليوم واستفد من تخفيض 10% 🎁\nVotre abonnement expire dans 7 jours — Renouvelez aujourd'hui !",
+    'test-abo7', true, 8000
+  );
+  sendNotif(
+    '🚨 Abonnement — اشتراكك',
+    "اشتراكك ينتهي خلال 3 أيام — جدّد الآن ! 🚨\nVotre abonnement expire dans 3 jours — Renouvelez maintenant !",
+    'test-abo3', true, 12000
+  );
+  const nom = (data && data.nom) ? data.nom : 'Membre';
+  const age = (data && data.age) ? data.age : 30;
+  sendNotif(
+    `🎂 Joyeux anniversaire ${nom} ! — ميلاد سعيد !`,
+    `🎉 Joyeux anniversaire ${nom} !\nميلاد سعيد يا ${nom} ! 🎉\n\nتمنياتنا بالصحة والسعادة 💚\nL'équipe Fitland vous souhaite le meilleur !\n\n🎁 Cadeau spécial pour toi aujourd'hui :\nSi tu renouvelles ton abonnement aujourd'hui,\ntu bénéficies d'une remise de ${age} % !\n\n🎁 هدية خاصة ليوم ميلادك :\nإذا جدّدت اشتراكك اليوم،\nتستفيد من تخفيض ${age} % !`,
+    'test-anniv', true, 16000
+  );
 }
 
-// Clic sur notification
+// ---- Clic sur notification ----
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
     clients.matchAll({type:'window', includeUncontrolled:true}).then(list => {
-      if(list.length > 0) {
-        return list[0].focus();
-      }
+      if(list.length > 0) return list[0].focus();
       return clients.openWindow('/');
     })
   );

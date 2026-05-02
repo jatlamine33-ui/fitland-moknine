@@ -3312,78 +3312,94 @@ window.planifierNotificationsApp = async function planifierNotificationsApp() {
       dob: userData.dob || null,
       nom: userData.name || 'Membre'
     });
+
+    // Enregistrer le Periodic Sync si supporté (Android Chrome)
+    if('periodicSync' in reg) {
+      try {
+        const status = await navigator.permissions.query({name: 'periodic-background-sync'});
+        if(status.state === 'granted') {
+          await reg.periodicSync.register('fitland-notifs', {
+            minInterval: 60 * 60 * 1000 // toutes les heures
+          });
+          console.log('[App] Periodic sync enregistré');
+        }
+      } catch(psErr) {
+        console.warn('[App] Periodic sync non supporté:', psErr);
+      }
+    }
+
+    // Enregistrer un Background Sync de fallback
+    if('sync' in reg) {
+      try {
+        await reg.sync.register('fitland-check-notifs');
+        console.log('[App] Background sync enregistré');
+      } catch(sErr) {
+        console.warn('[App] Background sync non supporté:', sErr);
+      }
+    }
+
     return true;
   } catch(err) {
     console.warn('Planification notifications impossible:', err);
     return false;
   }
 }
-
 window.testerNotification = async function testerNotification() {
   try {
     if(!('Notification' in window)) {
-      alert('Les notifications ne sont pas supportées sur ce navigateur.');
+      showToast('<b>Non supporté</b>Ton navigateur ne supporte pas les notifications', 'error');
       return;
     }
 
-    // Les notifications ne marchent pas bien en navigation privée sur plusieurs navigateurs.
-    const isLikelyIncognito = !!(navigator.storage && navigator.storage.estimate);
-
-    // Demande l'autorisation directement après le clic utilisateur
     if(Notification.permission === 'default') {
       const perm = await Notification.requestPermission();
       window.verifierEtatNotifications();
       if(perm !== 'granted') {
-        alert('Notification refusée. Active l’autorisation dans les paramètres du navigateur.');
+        showToast('<b>Permission refusée</b>Active les notifications dans les paramètres', 'error');
         return;
       }
     }
 
     if(Notification.permission === 'denied') {
-      alert('Les notifications sont bloquées. Clique sur le cadenas à côté du lien, puis autorise les notifications. Évite le mode navigation privée pour ce test.');
+      showToast('<b>Notifications bloquées</b>Clique sur le cadenas et autorise les notifications', 'error');
       return;
     }
 
-    const title = '💪 Fitland — Test Notification';
-    const options = {
-      body: "La douleur d'aujourd'hui est la force de demain\nألم اليوم قوة الغد\n\n📋 Test cours :\n• 09h00 — Morning Fitness\n• 18h30 — Step / LIA",
-      icon: './icon-192.png',
-      badge: './icon-192.png',
-      tag: 'fitland-test-' + Date.now(),
-      renotify: false,
-      requireInteraction: false,
-      vibrate: [200, 100, 200]
-    };
-
-    // Méthode la plus fiable pour PWA / GitHub Pages : showNotification depuis la registration
+    // Récupérer le SW
+    let sw = null;
     if('serviceWorker' in navigator) {
       try {
         let reg = await navigator.serviceWorker.getRegistration('./');
-        if(!reg) {
-          reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
-        }
+        if(!reg) reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
         await navigator.serviceWorker.ready;
-        await reg.showNotification(title, options);
-        showToast('Notification test envoyée ✅', 'success');
-        return;
-      } catch(swErr) {
-        console.warn('Service worker/showNotification impossible:', swErr);
-      }
+        sw = navigator.serviceWorker.controller || reg.active;
+      } catch(e) { sw = null; }
     }
 
-    // Fallback navigateur desktop
-    try {
-      new Notification(title, options);
-      showToast('Notification test envoyée ✅', 'success');
+    if(!sw) {
+      showToast('<b>Erreur</b>Service Worker non disponible', 'error');
       return;
-    } catch(directErr) {
-      console.warn('Notification directe impossible:', directErr);
     }
 
-    alert("Impossible d'envoyer la notification. Teste dans une fenêtre normale, pas en navigation privée, puis autorise les notifications depuis le cadenas du navigateur.");
+    // Calculer l'âge depuis la date de naissance
+    let age = 30;
+    if(userData && userData.dob) {
+      const dob = new Date(userData.dob);
+      age = new Date().getFullYear() - dob.getFullYear();
+    }
+
+    // Envoyer les 5 notifications via SW
+    sw.postMessage({
+      type: 'TEST_NOTIF',
+      nom: userData && userData.name ? userData.name : 'Membre',
+      age: age
+    });
+
+    showToast('<b>Test lancé 🔔</b>5 notifications arrivent dans les 16 secondes...', 'success', 5000);
+
   } catch(err) {
     console.error('Erreur notification test:', err);
-    alert("Impossible d'envoyer la notification test. Vérifie l'autorisation du navigateur et évite la navigation privée.");
+    showToast('<b>Erreur</b>Impossible d\'envoyer la notification test', 'error');
   }
 }
 
