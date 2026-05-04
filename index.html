@@ -3251,14 +3251,84 @@ function openWA(num){
 }
 
 </script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+
 <script>
+// ===== FIREBASE CONFIG =====
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAojAsGu5_1NAwOx9cX8uJq_0u5AImA3do",
+  authDomain: "fitland-moknine.firebaseapp.com",
+  projectId: "fitland-moknine",
+  storageBucket: "fitland-moknine.firebasestorage.app",
+  messagingSenderId: "11461984898",
+  appId: "1:11461984898:web:efbaf2470da556d90e6a9b"
+};
+const VAPID_KEY = "BCnbq_CFkrXncL5t_eC3LLqWWcHzlp_xTvwj7aKdAvRxKh4mB_mY2J17hNdcsi_WlmfI_Q6lIPJYBLXEbMOvh5j4";
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const messagingFCM = firebase.messaging();
+
+// Enregistrer le SW
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('./sw.js', { scope: './' })
-      .then(r=>console.log('SW registered'))
-      .catch(e=>console.log('SW error:', e));
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+      console.log('[App] SW registered');
+      
+      // Récupérer le token FCM si notifications accordées
+      if(Notification.permission === 'granted') {
+        await recupererTokenFCM(reg);
+      }
+    } catch(e) {
+      console.log('[App] SW error:', e);
+    }
   });
 }
+
+// Récupérer et sauvegarder le token FCM dans Supabase
+async function recupererTokenFCM(reg) {
+  try {
+    const token = await messagingFCM.getToken({
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: reg
+    });
+    if(token) {
+      console.log('[FCM] Token récupéré:', token.substring(0, 20) + '...');
+      // Sauvegarder dans Supabase avec le profil utilisateur
+      await sauvegarderTokenFCM(token);
+    }
+  } catch(err) {
+    console.warn('[FCM] Erreur token:', err);
+  }
+}
+
+// Sauvegarder le token FCM dans Supabase
+async function sauvegarderTokenFCM(token) {
+  try {
+    const phone = userData && userData.phone ? userData.phone : null;
+    if(!phone) return;
+    
+    const { error } = await supabase
+      .from('membres')
+      .update({ fcm_token: token })
+      .eq('phone', phone);
+    
+    if(!error) console.log('[FCM] Token sauvegardé dans Supabase');
+  } catch(err) {
+    console.warn('[FCM] Erreur sauvegarde token:', err);
+  }
+}
+
+// Notification FCM reçue quand app est ouverte (foreground)
+messagingFCM.onMessage(function(payload) {
+  console.log('[FCM] Message foreground reçu:', payload);
+  const { title, body } = payload.notification || {};
+  if(title) {
+    showToast(`<b>${title}</b>${body || ''}`, 'info', 5000);
+  }
+});
 
 // ===== NOTIFICATIONS =====
 window.verifierEtatNotifications = function verifierEtatNotifications() {
