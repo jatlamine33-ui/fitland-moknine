@@ -3276,10 +3276,12 @@ if('serviceWorker' in navigator){
     try {
       const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
       console.log('[App] SW registered');
-      
-      // Récupérer le token FCM si notifications accordées
+      await navigator.serviceWorker.ready;
+      // Récupérer le token FCM si notifications déjà accordées
       if(Notification.permission === 'granted') {
-        await recupererTokenFCM(reg);
+        setTimeout(async () => {
+          await recupererTokenFCM(reg);
+        }, 3000); // Attendre que l'app soit bien chargée
       }
     } catch(e) {
       console.log('[App] SW error:', e);
@@ -3365,6 +3367,11 @@ window.demanderPermissionNotif = async function demanderPermissionNotif() {
   window.verifierEtatNotifications();
   if(perm === 'granted') {
     await window.planifierNotificationsApp();
+    // Récupérer et sauvegarder le token FCM immédiatement
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await recupererTokenFCM(reg);
+    } catch(e) { console.warn('[FCM] Erreur récupération token:', e); }
     return true;
   }
   alert('Notifications non autorisées. Active-les dans les paramètres du navigateur.');
