@@ -1,35 +1,26 @@
 // ===== SERVICE WORKER - FITLAND MOKNINE =====
-// Firebase Cloud Messaging (FCM) - Notifications fiables sur Android/iOS
-importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
+// Web Push natif + Supabase Edge Function
 
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAojAsGu5_1NAwOx9cX8uJq_0u5AImA3do",
-  authDomain: "fitland-moknine.firebaseapp.com",
-  projectId: "fitland-moknine",
-  storageBucket: "fitland-moknine.firebasestorage.app",
-  messagingSenderId: "11461984898",
-  appId: "1:11461984898:web:efbaf2470da556d90e6a9b"
-};
-
-firebase.initializeApp(FIREBASE_CONFIG);
-const messaging = firebase.messaging();
-
-// ===== RECEPTION DES NOTIFICATIONS FCM EN ARRIERE-PLAN =====
-messaging.onBackgroundMessage(function(payload) {
-  console.log('[SW FCM] Message reçu en arrière-plan:', payload);
-  const { title, body, icon } = payload.notification || {};
-  const data = payload.data || {};
+// ===== RECEPTION DES PUSH WEB =====
+self.addEventListener('push', e => {
+  console.log('[SW] Push reçu:', e);
+  const data = e.data ? e.data.json() : {};
+  const title = data.title || '💪 Fitland';
+  const body = data.body || '';
+  const tag = data.tag || 'fitland-' + Date.now();
+  const requireInteraction = data.requireInteraction || false;
   
-  self.registration.showNotification(title || '💪 Fitland', {
-    body: body || '',
-    icon: icon || '/icon-192.png',
-    badge: '/icon-192.png',
-    tag: data.tag || 'fcm-' + Date.now(),
-    requireInteraction: data.requireInteraction === 'true',
-    vibrate: [200, 100, 200],
-    data: data
-  });
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag,
+      requireInteraction,
+      vibrate: [200, 100, 200],
+      data
+    })
+  );
 });
 
 const CACHE_NAME = 'fitland-v1';
