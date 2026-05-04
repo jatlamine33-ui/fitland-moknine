@@ -3310,12 +3310,21 @@ async function sauvegarderTokenFCM(token) {
     const phone = userData && userData.phone ? userData.phone : null;
     if(!phone) return;
     
-    const { error } = await supabase
-      .from('membres')
-      .update({ fcm_token: token })
-      .eq('phone', phone);
-    
-    if(!error) console.log('[FCM] Token sauvegardé dans Supabase');
+    const res = await fetch(SUPA_URL + '/rest/v1/users?phone=eq.' + encodeURIComponent(String(phone)), {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ push_token: token })
+    });
+    if(res.ok) {
+      console.log('[FCM] Token sauvegardé dans Supabase ✅');
+    } else {
+      console.warn('[FCM] Erreur sauvegarde token:', res.status, await res.text());
+    }
   } catch(err) {
     console.warn('[FCM] Erreur sauvegarde token:', err);
   }
