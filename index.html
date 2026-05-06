@@ -2263,6 +2263,10 @@ function finishQcm(){
 function showMain(){
   switchScreen('main');
   updateProfileDisplay();
+  // Re-subscribe push automatiquement si permission déjà accordée
+  if('Notification' in window && Notification.permission === 'granted') {
+    setTimeout(() => recupererPushToken(), 2000);
+  }
 }
 
 // ===== PROFILE DISPLAY =====
