@@ -3310,7 +3310,8 @@ function openWA(num){
 
 </script>
 <script>
-const VAPID_KEY = "BE_z7bSzpl56BHNq93TiXCiLlFOqgEO7MwUkToBfw42dqm-p5hi8-Aje50qpnP9VHo16KNhZybdqqTP8a5iwpVk";
+const VAPID_KEY = "BCtq7SFMwwTmacq4dMS5DNT0n6HuZciV25XZ9rRJBI1S7cOAY5lSlqiRSdyMUy3UJAikpKvp7HX_GIBTabfr4EY";
+const VAPID_VERSION = 'v2';
 
 // Convertir la clé VAPID base64url en Uint8Array
 function urlBase64ToUint8Array(base64String) {
@@ -3344,14 +3345,18 @@ async function recupererPushToken() {
       return;
     }
     const reg = await navigator.serviceWorker.ready;
-    // Vérifier si déjà souscrit
     let sub = await reg.pushManager.getSubscription();
+    // Si la clé VAPID a changé, forcer le re-abonnement
+    if(sub && localStorage.getItem('vapid_version') !== VAPID_VERSION) {
+      await sub.unsubscribe();
+      sub = null;
+    }
     if(!sub) {
-      // Créer une nouvelle souscription
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_KEY)
       });
+      localStorage.setItem('vapid_version', VAPID_VERSION);
     }
     console.log('[Push] Souscription obtenue');
     // Sauvegarder dans Supabase
