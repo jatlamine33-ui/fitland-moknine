@@ -41,6 +41,11 @@
   --warn:#ff9f0a;
   --safe:#34c759;
   --purple:#bf5af2;
+  --muted:#888888;
+  --green:#34c759;
+  --border:#2a2a2a;
+  --text:#ffffff;
+  --card:#1a1a1a;
 }
 html,body{height:100%;overflow:hidden;background:var(--ink);position:fixed;width:100%}
 body{font-family:'DM Sans',sans-serif;color:var(--snow)}
@@ -2077,8 +2082,8 @@ async function loadFromCloud(phone) {
       aboStart: user.abo_start, aboDur: user.abo_dur,
       aboType: user.abo_type||'acces-total',
       notifCours: user.notif_cours !== false,
-      notifAbo: true,
-      notifAnniv: true,
+      notifAbo: user.notif_abo !== false,
+      notifAnniv: user.notif_anniv !== false,
     };
     const poidsRes = await fetch(SUPA_URL + '/rest/v1/poids_history?user_phone=eq.' + encodeURIComponent(String(phone)), {
       headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY}
@@ -2205,6 +2210,9 @@ async function goToQcm(){
   userData.sexe = selectedSex;
   userData.taille = taille;
   userData.poids = parseFloat(poids);
+  userData.notifAbo = true;
+  userData.notifAnniv = true;
+  userData.notifCours = true;
   saveUser();
   document.getElementById('qdot-1').classList.add('done');
   switchScreen('qcm');
@@ -2286,9 +2294,6 @@ function updateProfileDisplay(){
   if(atEl && userData.aboType) atEl.value=userData.aboType;
   const ncEl = document.getElementById('notif-cours');
   if(ncEl) ncEl.checked = userData.notifCours !== false;
-  // Forcer abo et anniv à true
-  userData.notifAbo = true;
-  userData.notifAnniv = true;
   // Vérifier l'état des permissions notifications
   verifierEtatNotifications();
   updateAboStatus();
@@ -2317,11 +2322,12 @@ function prefillCalculators(){
   const sexefields = ['tmb-sexe','cal-sexe'];
   if(userData.poids){ fields.forEach(f=>{const el=document.getElementById(f);if(el)el.value=userData.poids;}); }
   if(userData.taille){ tfields.forEach(f=>{const el=document.getElementById(f);if(el)el.value=userData.taille;}); }
-  if(userData.age){ afields.forEach(f=>{const el=document.getElementById(f);if(el)el.value=userData.age;}); }
+  const _age = getAge();
+  if(_age){ afields.forEach(f=>{const el=document.getElementById(f);if(el)el.value=_age;}); }
   if(userData.sexe){ sexefields.forEach(f=>{const el=document.getElementById(f);if(el)el.value=userData.sexe;}); }
   // Auto-calculate if all data available
   if(userData.poids&&userData.taille){calcIMC();}
-  if(userData.poids&&userData.taille&&userData.age&&userData.sexe){calcTMB();calcCal();}
+  if(userData.poids&&userData.taille&&_age&&userData.sexe){calcTMB();calcCal();}
 }
 
 function highlightRecommendedProg(){ renderProgrammes(); }
@@ -2337,9 +2343,6 @@ function saveProfile(){
   if(aboType) userData.aboType = aboType.value;
   const notifCours = document.getElementById('notif-cours');
   if(notifCours) userData.notifCours = notifCours.checked;
-  // Abo et anniv toujours actifs
-  userData.notifAbo = true;
-  userData.notifAnniv = true;
   // Reprogrammer les notifications
   planifierNotificationsApp();
   saveUser();
@@ -2458,7 +2461,7 @@ function renderCharges(){
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
       <div><div style="font-size:13px;font-weight:600">${ex}</div><div style="font-size:10px;color:var(--muted)">${data.date}</div></div>
       <div style="display:flex;align-items:center">
-        <span style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:var(--green)">${data.kg}</span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:var(--green)">${data.kg}</span>
         <span style="font-size:11px;color:var(--muted);margin-left:2px">kg</span>
         ${deltaHtml}
         <span onclick="deleteCharge('${ex}')" style="color:#ef4444;cursor:pointer;font-size:16px;margin-left:10px">✕</span>
@@ -2472,6 +2475,12 @@ function deleteCharge(ex){
   delete userData.charges[ex];
   saveUser();
   renderCharges();
+  if(userData.phone){
+    fetch(SUPA_URL + '/rest/v1/charges?user_phone=eq.' + encodeURIComponent(String(userData.phone)) + '&exercice=eq.' + encodeURIComponent(ex), {
+      method: 'DELETE',
+      headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY}
+    }).catch(e => console.error('Delete charge error:', e));
+  }
 }
 function updateFreq(val){
   document.getElementById('freq-val').textContent = val+'x';
@@ -2644,6 +2653,13 @@ function deletePoidsEntry(m){
   delete userData.poidsHistory[m];
   saveUser();
   updateStats();
+  if(userData.phone){
+    const annee = new Date().getFullYear();
+    fetch(SUPA_URL + '/rest/v1/poids_history?user_phone=eq.' + encodeURIComponent(String(userData.phone)) + '&mois=eq.' + m + '&annee=eq.' + annee, {
+      method: 'DELETE',
+      headers: {'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY}
+    }).catch(e => console.error('Delete poids error:', e));
+  }
 }
 
 // ===== AVATAR & PHOTOS =====
@@ -3388,7 +3404,7 @@ window.verifierEtatNotifications = function verifierEtatNotifications() {
 
 window.demanderPermissionNotif = async function demanderPermissionNotif() {
   if(!('Notification' in window)) {
-    alert('Les notifications ne sont pas supportées sur ce navigateur.');
+    showToast('<b>Non supporté</b>Les notifications ne sont pas disponibles sur ce navigateur', 'error', 5000);
     return false;
   }
   const perm = await Notification.requestPermission();
@@ -3399,7 +3415,7 @@ window.demanderPermissionNotif = async function demanderPermissionNotif() {
     setTimeout(() => recupererPushToken(), 1000);
     return true;
   }
-  alert('Notifications non autorisées. Active-les dans les paramètres du navigateur.');
+  showToast('<b>Permission refusée</b>Active les notifications dans les paramètres du navigateur<span class="ar">فعّل الإشعارات من إعدادات المتصفح</span>', 'error', 5000);
   return false;
 }
 
