@@ -889,7 +889,7 @@ button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
               <span class="k" data-i="aboLbl"></span>
               <div class="dl" id="daysLbl"></div>
               <p><b id="aboTypeV"></b><br><span id="aboEnd"></span></p>
-              <button class="renew" id="renew" data-i="renew"></button>
+              <button class="renew" id="renew" data-desk data-i="renew"></button>
               <button class="renew" id="deskBtn" data-desk data-i="deskBtn" hidden></button>
             </div>
             <div class="hero-num">
@@ -2034,7 +2034,8 @@ function openDesk(){closeSheets();flow='desk';osStack=[];pinMode='staff';pinBuf=
 function closeDesk(){STAFF_PIN=null;flow='';pinMode='';pinBuf='';$('onb').hidden=true;renderHome();setNotes();}
 function openStaffMember(ph){
   stPhone=ph;const a=ACCOUNTS[ph];
-  FORMS.staff=a.abo?{type:a.abo.type,start:a.abo.start,dur:a.abo.dur}:{type:'acces-total',start:isoAgo(0),dur:1};
+  const ai=ph===CUR?aboInfo():null,expire=ai&&ai.left<=0;   // renouvellement : on repart d'aujourd'hui
+  FORMS.staff=a.abo?{type:a.abo.type,start:expire?isoAgo(0):a.abo.start,dur:a.abo.dur}:{type:'acces-total',start:isoAgo(0),dur:1};
   $('fa-staff').innerHTML='';
   oGo('o-staffm');
 }
