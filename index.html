@@ -1763,7 +1763,7 @@ async function flClaim(code){
   }
   pinMode='claim1';pinErr(t(isNetErr(r)?'netErr':'saveErr'));
 }
-let claimDob='';
+let claimDob='',loginBusy=false;
 // Accueil : le code reste en mémoire le temps de la saisie (jamais enregistré)
 async function flStaffCheck(code){
   kpBusy(true);
@@ -1971,7 +1971,18 @@ $('onb').addEventListener('click',e=>{
   if(o==='login'){
     const ph=digits($('fLogin').value);
     if(ph.length!==8){$('eLogin').textContent=t('errPhone');return;}
-    $('eLogin').textContent='';loginPhone=ph;pinMode='login';pinBuf='';oGo('o-pin');return;
+    $('eLogin').textContent='';loginPhone=ph;
+    // On demande d'abord à la base si ce numéro a déjà un code : sinon, on passe directement à la date de naissance
+    if(loginBusy)return;loginBusy=true;
+    flRpc('fl_phone_status',{p_phone:ph}).then(r=>{
+      loginBusy=false;
+      if(loginPhone!==ph||curOs!=='o-login')return;
+      if(r&&r.status==='not_found'){$('eLogin').innerHTML=t('errUnknown')+'<button data-o="new">'+t('createInstead')+'</button>';return;}
+      if(r&&r.status==='pin_not_set'){pinMode='';pinBuf='';$('fClaimDob').value='';$('eClaim').textContent='';oGo('o-claim');return;}
+      if(r&&r.status==='locked'){$('eLogin').textContent=lockMsg(r);return;}
+      pinMode='login';pinBuf='';oGo('o-pin');   // code déjà créé, ou base injoignable : la saisie du code gère la suite
+    });
+    return;
   }
   if(o==='changeNum'){osStack.pop();pinMode='';oGo('o-login',false);return;}
   if(o==='claim'){
