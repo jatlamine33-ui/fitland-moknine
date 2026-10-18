@@ -124,6 +124,14 @@ button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .st-done{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--acct)}
 .st-done button{font-size:12px;color:var(--mut);text-decoration:underline}
 .defi{margin:14px 18px 0;background:var(--surf);border-radius:16px;padding:16px}
+/* Accès réservé aux abonnés (gérant jamais bloqué, 7 jours d'essai pour les nouveaux) */
+.lockbox{display:none;flex-direction:column;gap:8px;margin:14px 18px 0;background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:16px}
+.lockbox b{font-size:15px}.lockbox p{margin:0;color:var(--mut);font-size:13px;line-height:1.45}
+.lockbox .renew{background:var(--brand);color:#1C1B19}
+#app.locked .lockbox{display:flex}
+#app.locked #streak,#app.locked #defi,#app.locked #planPane,#app.locked #progPane,#app.locked #seanceSeg{display:none!important}
+.trial{margin:14px 18px 0;padding:11px 14px;border-radius:12px;background:var(--surf);font-size:13px;color:var(--mut)}
+.trial b{color:var(--brand)}
 .df-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .df-h small{font-size:11px;color:var(--mut);white-space:nowrap}
 .df-me{display:flex;align-items:flex-end;gap:10px;margin-top:8px}
@@ -903,6 +911,8 @@ button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
             <div class="cls"><div class="n" id="nxName"></div><p id="nxMeta"></p></div>
             <div class="cd"><span class="n" id="cd"></span><small id="cdLbl"></small></div>
           </div>
+          <div class="trial" id="trialBox" hidden></div>
+          <div class="lockbox"><b data-i="lockT"></b><p data-i="lockS"></p><button class="renew" data-desk data-i="renew"></button></div>
           <div class="streak" id="streak" hidden></div>
           <div class="defi" id="defi" hidden></div>
           <div id="homeNews"></div>
@@ -945,6 +955,7 @@ button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
         <section class="view" data-v="prog">
           <div class="pad stack" style="padding-top:6px">
             <div class="row"><div class="h" data-i="seanceT"></div><div class="seg" id="seanceSeg"><button class="on" data-sg="plan" data-i="segProg"></button><button data-sg="prog" data-i="segProgress"></button></div></div>
+            <div class="lockbox" style="margin:0"><b data-i="lockT"></b><p data-i="lockS"></p><button class="renew" data-desk data-i="renew"></button></div>
             <div id="planPane" class="stack"></div>
             <div id="progPane" class="stack" hidden>
             <div class="row"><span class="k" data-i="weight"></span><button class="add" id="addW" data-i="addW"></button></div>
@@ -1104,6 +1115,7 @@ function fromPayload(p, exNames, now) {
     REC: exNames.map(n => { const c = ch.get(n); return c ? { kg: +c.kg, prev: c.prev_kg == null ? null : +c.prev_kg } : null; }),
     days: ((p && p.jours) || []).map(d => String(d).slice(0, 10)),
     done: +(p && p.nb_seances) || 0, memberNo: +(p && p.member_no) || null, defi: !!(p && p.defi), defiMois: +(p && p.defi_mois) || 0,
+    createdAt: u.created_at || null,
     notifs: [u.notif_cours !== false, u.notif_abo !== false, u.notif_anniv !== false]
   };
 }
@@ -1124,7 +1136,24 @@ function fromContenu(c) {
   return { coaches, plan, prices, annonces, hrs, defi: { on: df.on !== false, rew: { fr: df.rew_fr || '', ar: df.rew_ar || '' } }, car };
 }
 
-if (typeof module !== 'undefined') module.exports = { flRpc, isNetErr, freqNum, freqTxt, memberId, poidsSerie, fromPayload, fromContenu };
+// Accès au programme, aux séances, au défi et aux progrès :
+// gérant toujours ; sinon abonnement en cours ; sinon 7 jours d'essai après l'inscription (sans abonnement)
+const ESSAI_JOURS = 7;
+function accesApp(acc, now) {
+  if (!acc || acc.role === 'owner') return { ok: true, essai: null };
+  if (acc.abo) {
+    const end = new Date(acc.abo.start + 'T00:00:00'); end.setMonth(end.getMonth() + acc.abo.dur);
+    return { ok: end > now, essai: null };   // même fin que l'affichage des jours restants
+  }
+  if (acc.createdAt) {
+    const c = new Date(acc.createdAt);   // en jours de calendrier : le jour de l'inscription est le jour 1
+    const d = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(c.getFullYear(), c.getMonth(), c.getDate())) / 864e5);
+    if (d >= 0 && d < ESSAI_JOURS) return { ok: true, essai: ESSAI_JOURS - d };
+  }
+  return { ok: false, essai: null };
+}
+
+if (typeof module !== 'undefined') module.exports = { flRpc, isNetErr, freqNum, freqTxt, memberId, poidsSerie, fromPayload, fromContenu, accesApp };
 
 /* ═══ Données réelles de l'app (index.html + sw.js) ═══ */
 // Planning Salle 2, indexé comme getDay() : 0 = dimanche … 6 = samedi. sp = séance spéciale (enfants / APA)
@@ -1196,7 +1225,7 @@ infoLbl:"Mes informations",infoGoal:"Objectif",infoLevel:"Niveau",infoFreq:"Séa
 lockedNote:"La date de naissance ne se modifie pas : elle sert à retrouver ton compte.",hSheet:"Ta taille",mcNo:"N° membre",profileSaved:"Profil mis à jour",
 aboutLbl:"À propos",site:"Site officiel",partnerQ:"Vous êtes un partenaire ? Nous contacter",
 recovLbl:"Récupération",recov:[["Sommeil","7 à 9h par nuit. Le muscle se construit pendant le repos."],["Étirements","5 à 10 min après chaque séance. Réduit les courbatures."],["Hydratation","Boire avant, pendant et après. Minimum 2L par jour."],["Jours de repos","1 à 2 jours obligatoires. Le corps a besoin de récupérer."]],
-deskBtn:"Accueil · enregistrer",deskLink:"Accueil · modifier l'abonnement",deskSaved:"Abonnement enregistré par l'accueil",
+deskBtn:"Accueil · enregistrer",deskLink:"Accueil · modifier l'abonnement",deskSaved:"Abonnement enregistré par l'accueil",lockT:"Réservé aux abonnés",lockS:"Ton programme, tes séances, le défi et tes progrès s'ouvrent dès que ton abonnement est actif. Passe à l'accueil pour le renouveler.",trialS:"<b>Essai gratuit</b> : encore {n} pour découvrir ton programme. Ensuite, il faudra un abonnement actif.",
 seanceT:"Séance",nSeance:"Séance",segProg:"Programme",segProgress:"Progrès",progFor:"Choisi selon ton objectif et ton niveau. Ton rythme : {n} par semaine.",perWeekShort:"{n} / semaine",minutes:"{n} min",
 weekLbl:"Cette semaine",weekVal:"{d} sur {n}",sessionsLbl:"Les séances",nextSession:"Séance du jour",start:"Commencer la séance",exCount:"{n} exercices",video:"Voir la démo",
 noObj:"Choisis ton objectif dans ton profil pour recevoir un programme.",lvNames:{debutant:"Débutant",intermediaire:"Intermédiaire",avance:"Avancé"},
@@ -1293,7 +1322,7 @@ infoLbl:"معلوماتي",infoGoal:"الهدف",infoLevel:"المستوى",info
 lockedNote:"تاريخ الميلاد لا يُعدّل: يُستعمل لاسترجاع حسابك.",hSheet:"طولك",mcNo:"رقم العضو",profileSaved:"تم تحديث الحساب",
 aboutLbl:"حول القاعة",site:"الموقع الرسمي",partnerQ:"هل أنت شريك؟ تواصل معنا",
 recovLbl:"التعافي",recov:[["النوم","النوم 7-9 ساعات — العضلة تنمو أثناء الراحة"],["التمدد","5-10 دقائق تمدد بعد كل جلسة"],["الترطيب","اشرب قبل وأثناء وبعد التدريب — 2L يومياً على الأقل"],["أيام الراحة","يوم أو يومان راحة إلزاميان — الجسم يحتاج للتعافي"]],
-deskBtn:"الاستقبال · تسجيل",deskLink:"الاستقبال · تعديل الاشتراك",deskSaved:"سجّل الاستقبال الاشتراك",
+deskBtn:"الاستقبال · تسجيل",deskLink:"الاستقبال · تعديل الاشتراك",deskSaved:"سجّل الاستقبال الاشتراك",lockT:"خاص بالمشتركين",lockS:"برنامجك وحصصك والتحدي وتقدّمك تُفتح عندما يكون اشتراكك ساريًا. توجّه إلى الاستقبال لتجديده.",trialS:"<b>تجربة مجانية</b>: تبقّى {n} لاكتشاف برنامجك. بعد ذلك يلزم اشتراك ساري.",
 seanceT:"تماريني",nSeance:"تماريني",segProg:"البرنامج",segProgress:"تقدّمي",progFor:"اخترناه حسب هدفك ومستواك. إيقاعك: {n} في الأسبوع.",perWeekShort:"{n} / أسبوع",minutes:"{n} دقيقة",
 weekLbl:"هذا الأسبوع",weekVal:"{d} من {n}",sessionsLbl:"الحصص",nextSession:"حصة اليوم",start:"ابدأ الحصة",exCount:"{n} تمارين",video:"شاهد الشرح",
 noObj:"اختر هدفك في حسابك لتحصل على برنامج.",lvNames:{debutant:"مبتدئ",intermediaire:"متوسط",avance:"متقدم"},
@@ -1455,6 +1484,9 @@ function renderHome(){
   ab.textContent=ABO?t('aboTypes')[ABO.type]:'';
   ab.style.display=ab.nextElementSibling.style.display=a?'':'none';
   document.getElementById('deskBtn').hidden=!!a;
+  const acc=accesApp(ACCOUNTS[CUR],now()),tb=document.getElementById('trialBox');
+  app.classList.toggle('locked',!acc.ok);
+  tb.hidden=!acc.essai;if(acc.essai)tb.innerHTML=fmt(t('trialS'),{n:lang==='ar'?dayWord(acc.essai):acc.essai+' jour'+(acc.essai>1?'s':'')});
   document.getElementById('ownerLnk').hidden=!(ACCOUNTS[CUR]&&ACCOUNTS[CUR].role==='owner');
   if(!a){
     g.textContent='';g.classList.remove('two');
