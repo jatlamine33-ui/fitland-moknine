@@ -23,56 +23,12 @@ self.addEventListener('push', e => {
   );
 });
 
-const CACHE_NAME = 'fitland-v1';
+const CACHE_NAME = 'fitland-v2';
+const PRECACHE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+const KEEP = [CACHE_NAME, 'fitland-userdata-v1', 'fitland-notifs-sent-v1'];
 
-// Planning des cours par jour (0=dim, 1=lun, ..., 6=sam)
-const PLANNING = {
-  1: [ // Lundi
-    {heure:'09h00', nom:'BFC', coach:'Khawla', type:'apres-midi'},
-    {heure:'15h00', nom:'Circuit Minceur', coach:'Amal', type:'apres-midi'},
-    {heure:'17h30', nom:'Danse Orientale', coach:'Tayssir / Marwa', type:'apres-midi'},
-    {heure:'18h30', nom:'Step 1+ / LIA', coach:'Marwa', type:'apres-midi'}
-  ],
-  2: [ // Mardi
-    {heure:'09h00', nom:'Morning Fitness Floor', coach:'Marwa', type:'matin'},
-    {heure:'16h30', nom:'Cardio Mix', coach:'Mariem', type:'apres-midi'},
-    {heure:'17h30', nom:'Pymp / TRX', coach:'Amina', type:'apres-midi'},
-    {heure:'18h30', nom:'Pilates', coach:'Marwa / Amina', type:'apres-midi'}
-  ],
-  3: [ // Mercredi
-    {heure:'09h00', nom:'Aéro Bande Élastique', coach:'Najla', type:'matin'},
-    {heure:'15h00', nom:'C.A.F', coach:'Amal', type:'apres-midi'},
-    {heure:'18h00', nom:'Cardio Mix / Strong', coach:'Marwa', type:'apres-midi'},
-    {heure:'19h00', nom:'Cycling', coach:'Souzane', type:'apres-midi'}
-  ],
-  4: [ // Jeudi
-    {heure:'09h00', nom:'Pilates', coach:'Amina', type:'matin'},
-    {heure:'17h30', nom:'Step 1', coach:'Mariem', type:'apres-midi'},
-    {heure:'18h30', nom:'Combat', coach:'Amal', type:'apres-midi'}
-  ],
-  5: [ // Vendredi
-    {heure:'09h00', nom:'Fullbody Workout', coach:'Yosra', type:'matin'},
-    {heure:'15h00', nom:'Tabata', coach:'Amal', type:'apres-midi'},
-    {heure:'16h30', nom:'C.A.F', coach:'Amina', type:'apres-midi'},
-    {heure:'17h30', nom:'BFC', coach:'Khawla', type:'apres-midi'},
-    {heure:'18h30', nom:'Zumba / iChoreo', coach:'Marwa', type:'apres-midi'}
-  ],
-  6: [ // Samedi
-    {heure:'10h-11h', nom:'APA Femmes Enceintes', coach:'', type:'matin'},
-    {heure:'11h00', nom:'APA', coach:'', type:'matin'},
-    {heure:'13h30', nom:'Karaté Kids', coach:'', type:'apres-midi'},
-    {heure:'15h-16h', nom:'Psychomotricité', coach:'', type:'apres-midi'},
-    {heure:'16h-17h30', nom:'Gymnastique', coach:'', type:'apres-midi'}
-  ],
-  0: [ // Dimanche
-    {heure:'09h30', nom:'Psychomotricité', coach:'', type:'matin'},
-    {heure:'10h30', nom:'Dance (Kids)', coach:'', type:'matin'},
-    {heure:'11h30', nom:'Gymnastique', coach:'', type:'matin'},
-    {heure:'13h30', nom:'Karaté Kids', coach:'', type:'apres-midi'}
-  ]
-};
+// Planning des cours : envoyé par l'app avec le message SCHEDULE_NOTIFS (contenu de la base)
 
-// Messages de motivation FR + AR (change chaque jour)
 const MESSAGES = [
   {fr: "La douleur d'aujourd'hui est la force de demain", ar: "ألم اليوم قوة الغد"},
   {fr: "Chaque effort compte, même le plus petit", ar: "كل جهد يحسب، حتى الأصغر"},
@@ -89,15 +45,15 @@ const MESSAGES = [
 
 // ---- Install ----
 self.addEventListener('install', e => {
-  console.log('[SW] Installed');
   self.skipWaiting();
+  e.waitUntil(caches.open(CACHE_NAME).then(c => Promise.all(PRECACHE.map(u => c.add(u).catch(() => {})))));
 });
 
 // ---- Activate ----
 self.addEventListener('activate', e => {
-  console.log('[SW] Activated');
   e.waitUntil(
-    clients.claim().then(() => {
+    caches.keys().then(keys => Promise.all(keys.filter(k => !KEEP.includes(k)).map(k => caches.delete(k))))
+    .then(() => clients.claim()).then(() => {
       // Vérifier les notifications dès l'activation
       return verifierEtEnvoyerNotifs();
     })
@@ -125,15 +81,22 @@ self.addEventListener('sync', e => {
 self.addEventListener('fetch', e => {
   // On vérifie les notifs à chaque requête réseau (réveil du SW)
   verifierEtEnvoyerNotifs().catch(()=>{});
-  // On laisse passer la requête normalement
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  const req = e.request, url = new URL(req.url);
+  // Seulement les fichiers de l'app (même site, lecture) ; Supabase et le reste passent sans cache
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+  e.respondWith(
+    fetch(req).then(res => {
+      if (res && res.ok) { const copy = res.clone(); caches.open(CACHE_NAME).then(c => c.put(req, copy)); }
+      return res;
+    }).catch(() => caches.match(req).then(r => r || (req.mode === 'navigate' ? caches.match('./index.html') : undefined)))
+  );
 });
 
 // ---- Message depuis l'app ----
 self.addEventListener('message', e => {
   if(e.data && e.data.type === 'SCHEDULE_NOTIFS') {
-    const {aboType, notifCours, notifAbo, notifAnniv, aboStart, aboDur, dob, nom} = e.data;
-    self.userData = {aboType, notifCours, notifAbo, notifAnniv, aboStart, aboDur, dob, nom};
+    const {aboType, notifCours, notifAbo, notifAnniv, aboStart, aboDur, dob, nom, planning} = e.data;
+    self.userData = {aboType, notifCours, notifAbo, notifAnniv, aboStart, aboDur, dob, nom, planning: planning || {}};
     // Sauvegarder dans le cache pour persister entre les réveils
     sauvegarderUserData(self.userData);
     verifierEtEnvoyerNotifs();
@@ -237,7 +200,11 @@ async function verifierEtEnvoyerNotifs() {
 async function envoyerNotifCours(session, date, userData) {
   const aboType = userData.aboType || 'acces-total';
   const jourIndex = date.getDay();
-  const coursDuJour = PLANNING[jourIndex] || [];
+  // Cours du jour envoyés par l'app : { heure:'09:00', nom, coach, tag } ; avant midi = matin
+  const kids = aboType === 'kids';
+  const coursDuJour = ((userData.planning || {})[jourIndex] || [])
+    .filter(c => kids ? c.tag === 'kids' : c.tag !== 'kids')
+    .map(c => ({ heure: String(c.heure).replace(':', 'h'), nom: c.nom, coach: c.coach || '', type: parseInt(c.heure, 10) < 12 ? 'matin' : 'apres-midi' }));
 
   let coursFiltrés = coursDuJour;
   if(aboType === 'fitness') return false;
