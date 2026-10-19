@@ -873,8 +873,18 @@ button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
             <div class="os-body">
               <span class="k" data-i="admK"></span><div class="h" data-i="admTar"></div>
               <div class="chips main" id="admOffer"></div>
+              <span class="fl" style="margin-top:6px" data-i="tOfferK"></span>
+              <div class="field"><label class="fl" for="toN" data-i="tOfferName"></label><input class="inp" id="toN" maxlength="40"></div>
+              <div class="field"><label class="fl" for="toNa" data-i="tOfferNameAr"></label><input class="inp" id="toNa" dir="rtl" maxlength="40"></div>
+              <span class="fl" data-i="tWa"></span>
+              <div class="seg" id="toSalle" style="align-self:flex-start"><button data-ts="S1" data-i="S1"></button><button data-ts="S2" data-i="S2"></button></div>
+              <button class="link" id="toDel" data-o="offerDel" style="align-self:flex-start"></button>
+              <span class="fl" style="margin-top:12px" data-i="tSubK"></span>
               <div class="chips" id="admSub"></div>
+              <div class="field"><label class="fl" for="tsN" id="tsNL"></label><input class="inp" id="tsN" maxlength="40"></div>
+              <div class="field"><label class="fl" for="tsNa" data-i="tSubNameAr"></label><input class="inp" id="tsNa" dir="rtl" maxlength="40"></div>
               <div id="admPrices"></div>
+              <button class="link" id="tsDel" data-o="subDel" style="align-self:flex-start"></button>
               <p class="small-note" data-i="tarNote"></p><p class="err" id="eTar"></p>
             </div>
             <div class="os-foot"><button class="cta" data-o="tarSave" data-i="save"></button></div>
@@ -1128,14 +1138,20 @@ function fromContenu(c) {
   const coaches = (c.coachs || []).map(x => [x.nom, x.nom_ar || x.nom, x.salle, x.spec || '', x.spec_ar || x.spec || '', x.id]);
   const plan = {}; for (let d = 0; d < 7; d++) plan[d] = [];
   for (const x of c.planning || []) if (plan[x.jour]) plan[x.jour].push([x.heure, x.fin || null, x.cours, x.coach || '', x.tag || null, x.id]);
-  const prices = {};
-  for (const x of c.tarifs || []) (prices[x.offre] = prices[x.offre] || {})[x.sous] = (x.prix || []).map(Number);
+  const prices = {}, subs = {}, subNames = {}, offers = {};
+  for (const x of c.tarifs || []) {
+    (prices[x.offre] = prices[x.offre] || {})[x.sous] = (x.prix || []).map(Number);
+    (subs[x.offre] = subs[x.offre] || []).push(x.sous);
+    if (x.nom_fr !== undefined) (subNames[x.offre] = subNames[x.offre] || {})[x.sous] = { fr: x.nom_fr || '', ar: x.nom_ar || '' };
+  }
+  // Offres gérées dans le Mode gestion : noms, numéro WhatsApp (une offre sans formule n'est pas affichée)
+  for (const o of c.offres || []) if (prices[o.code]) offers[o.code] = { fr: o.nom_fr || '', ar: o.nom_ar || '', salle: o.salle === 'S1' ? 'S1' : 'S2' };
   const annonces = (c.annonces || []).map(x => ({ id: x.id, type: x.type, fr: [x.titre_fr || '', x.texte_fr || ''], ar: [x.titre_ar || '', x.texte_ar || ''], end: x.fin || '' }));
   const hrs = {};
   for (const x of c.horaires || []) hrs[x.jour] = { h: [+x.h_open, +x.h_close], f: x.f_open == null ? null : [+x.f_open, +x.f_close] };
   const df = c.defi || {};
   const car = {}; for (const x of c.coachs || []) if (x.nom_ar) car[x.nom] = x.nom_ar;
-  return { coaches, plan, prices, annonces, hrs, defi: { on: df.on !== false, rew: { fr: df.rew_fr || '', ar: df.rew_ar || '' } }, car };
+  return { coaches, plan, prices, subs, subNames, offers, annonces, hrs, defi: { on: df.on !== false, rew: { fr: df.rew_fr || '', ar: df.rew_ar || '' } }, car };
 }
 
 // Accès au programme, aux séances, au défi et aux progrès :
@@ -1179,6 +1195,12 @@ const PRICES={fit:{_:[70,190,340,630]},cours:{mat:[55,135,265,530],apm:[80,200,3
  kids:{gym:[40,105,190,345],kar:[45,120,215,405],dan:[30,80,145,260],psy:[35,85,170,340]},libre:{mat:[85,205,400,820],apm:[120,290,580,1155],tot:[140,340,675,1350]}};
 const SUB={fit:[],cours:["mat","apm","tot"],kids:["gym","kar","dan","psy"],libre:["mat","apm","tot"]};
 const PHONE={fit:"51 224 224",cours:"51 908 909",kids:"51 908 909",libre:"51 224 224"};
+// Noms et numéro WhatsApp des offres, gérés dans le Mode gestion (sinon : textes de l'app)
+const OFFERS={},SUBN={};
+function offerName(o){const m=OFFERS[o];const v=m?(lang==='ar'?m.ar||m.fr:m.fr||m.ar):'';return v||(t('offers')||{})[o]||o;}
+function subName(o,s){const m=SUBN[o]&&SUBN[o][s];if(m)return lang==='ar'?m.ar||m.fr:m.fr||m.ar;return s==='_'?'':(t('subs')||{})[s]||s;}
+function showSubs(o){const S=SUB[o]||[];return S.length>1||(S.length===1&&!!subName(o,S[0]));}
+function phoneOf(o){const m=OFFERS[o];return m?(m.salle==='S1'?PHONE.fit:PHONE.cours):PHONE[o]||PHONE.cours;}
 const EX_BAR=[true,true,true,true,false,true,false,false];
 
 /* ═══ Membre d'exemple ═══ */
@@ -1207,12 +1229,12 @@ dfTopNow:"Les 3 premiers en ce moment",dfAdmNote:"En fin de mois, annonce les ga
 streakLbl:"Ma série",stWeeks1:"semaine",stWeeksN:"semaines d'affilée",stZero:"Viens une fois cette semaine pour lancer ta série",stKeep:"Viens cette semaine pour garder ta série",stThis:"Cette semaine : {n}",stBtnH:"Je me suis entraîné aujourd'hui",stBtnF:"Je me suis entraînée aujourd'hui",stDone:"✓ Entraînement noté aujourd'hui",stUndo:"Annuler",streakOk:"C'est noté, bravo !",stDays:["L","M","M","J","V","S","D"],
 ownerLink:"Gestion de la salle",ownerT:"Code propriétaire",ownerS:"Réservé au gérant de la salle.",
 admK:"Gestion",admT:"Contenu de l'app",admS:"Ce que tu modifies ici apparaît aussitôt chez tous les membres.",admAnn:"Annonces",annCount:"{n} en ligne",
-admPlan:"Planning des cours",admPlanS:"Salle 2 · cours collectifs",admTar:"Tarifs",admTarS:"Toutes les formules",admNote:"Prochainement : horaires et partenaires.",admExit:"Quitter la gestion",
+admPlan:"Planning des cours",admPlanS:"Salle 2 · cours collectifs",admTar:"Tarifs",admTarS:"Ajouter, renommer, supprimer, prix",admNote:"Prochainement : horaires et partenaires.",admExit:"Quitter la gestion",
 annNew:"Nouvelle annonce",annNews:"Nouveauté",annPromo:"Promo",annTitle:"Titre (français)",annText:"Texte (français)",annTitleAr:"Titre (arabe, facultatif)",annTextAr:"Texte (arabe, facultatif)",
 annEnd:"Visible jusqu'au (facultatif)",annPublish:"Publier",errAnn:"Écris au moins un titre, en français ou en arabe.",errAnnEnd:"La date de fin ne peut pas être passée.",
 annPublished:"Annonce publiée",annDeleted:"Annonce retirée",annExpired:"terminée",until2:"jusqu'au {d}",del:"Retirer",
 planNew:"Ajouter un cours",planTime:"Heure",planName:"Cours",planCoach:"Coach (facultatif)",planKids:"Séance enfants",planAddBtn:"Ajouter au planning",errPlan:"Indique l'heure et le nom du cours.",planAdded:"Cours ajouté",planDeleted:"Cours retiré",
-tarNote:"Les prix barrés et les économies sont calculés automatiquement à partir du tarif mensuel.",errTar:"Chaque prix doit être un nombre supérieur à 0.",tarSaved:"Tarifs enregistrés",
+tarNote:"Les prix barrés et les économies sont calculés automatiquement à partir du tarif mensuel.",errTar:"Chaque prix doit être un nombre supérieur à 0.",tarSaved:"Tarifs enregistrés",tOfferK:"Offre",tOfferName:"Nom de l'offre",tOfferNameAr:"Nom de l'offre en arabe",tWa:"WhatsApp affiché sous le prix",tSubK:"Formule",tSubName:"Nom de la formule",tSubNameAr:"Nom de la formule en arabe",tSubOpt:" (facultatif s'il n'y en a qu'une)",tNewOffer:"+ Nouvelle offre",tNewSub:"+ Nouvelle formule",tSingle:"Formule unique",delOffer:"Supprimer cette offre",delSub:"Supprimer cette formule",confirmDel:"Appuie encore pour confirmer la suppression",tarDeleted:"Supprimé",errTarName:"Donne un nom à l'offre.",errSubName:"Donne un nom à la formule.",errSubFirst:"Donne d'abord un nom à la formule qui existe déjà.",errLastSub:"C'est la dernière formule de l'offre : supprime l'offre à la place.",errLastOffer:"Il faut garder au moins une offre.",errTarLimit:"Nombre maximum atteint (12).",
 newsLbl:"Nouveautés",promoLbl:"Promos & offres",example:"Exemple",
 news:[["Nouveaux équipements","De nouveaux équipements ont été ajoutés au plateau musculation."]],
 promoDemo:["-20 % sur l'abonnement 3 mois","Jusqu'au 31 octobre, à l'accueil de la Salle 1."],
@@ -1304,12 +1326,12 @@ dfTopNow:"الثلاثة الأوائل حالياً",dfAdmNote:"في آخر ا�
 streakLbl:"سلسلتي",stWeeks1:"أسبوع",stWeeks2:"أسبوعان متتاليان",stWeeksN:"أسابيع متتالية",stWeeksB:"أسبوعًا متتاليًا",stZero:"تعال مرة هذا الأسبوع لتبدأ سلسلتك",stKeep:"تعال هذا الأسبوع لتحافظ على سلسلتك",stThis:"هذا الأسبوع: {n}",stBtnH:"تمرّنتُ اليوم",stBtnF:"تمرّنتُ اليوم",stDone:"✓ تم تسجيل تمرين اليوم",stUndo:"إلغاء",streakOk:"تم التسجيل، أحسنت!",stDays:["ن","ث","ر","خ","ج","س","ح"],
 ownerLink:"إدارة القاعة",ownerT:"رمز المالك",ownerS:"مخصص لمسيّر القاعة.",
 admK:"الإدارة",admT:"محتوى التطبيق",admS:"ما تعدّله هنا يظهر فوراً عند كل الأعضاء.",admAnn:"الإعلانات",annCount:"{n} منشورة",
-admPlan:"برنامج الحصص",admPlanS:"القاعة 2 · الحصص الجماعية",admTar:"الأسعار",admTarS:"كل الصيغ",admNote:"قريباً: التوقيت والشركاء.",admExit:"الخروج من الإدارة",
+admPlan:"برنامج الحصص",admPlanS:"القاعة 2 · الحصص الجماعية",admTar:"الأسعار",admTarS:"إضافة، تسمية، حذف، أسعار",admNote:"قريباً: التوقيت والشركاء.",admExit:"الخروج من الإدارة",
 annNew:"إعلان جديد",annNews:"جديد",annPromo:"عرض",annTitle:"العنوان (بالفرنسية)",annText:"النص (بالفرنسية)",annTitleAr:"العنوان (بالعربية، اختياري)",annTextAr:"النص (بالعربية، اختياري)",
 annEnd:"يظهر حتى (اختياري)",annPublish:"نشر",errAnn:"اكتب عنواناً على الأقل، بالفرنسية أو بالعربية.",errAnnEnd:"لا يمكن أن يكون تاريخ النهاية في الماضي.",
 annPublished:"تم نشر الإعلان",annDeleted:"تم حذف الإعلان",annExpired:"منتهٍ",until2:"حتى {d}",del:"حذف",
 planNew:"إضافة حصة",planTime:"الساعة",planName:"الحصة",planCoach:"المدرب (اختياري)",planKids:"حصة أطفال",planAddBtn:"إضافة إلى البرنامج",errPlan:"أدخل الساعة واسم الحصة.",planAdded:"تمت إضافة الحصة",planDeleted:"تم حذف الحصة",
-tarNote:"الأسعار المشطوبة والتوفير تُحسب تلقائياً من السعر الشهري.",errTar:"كل سعر يجب أن يكون رقماً أكبر من 0.",tarSaved:"تم حفظ الأسعار",
+tarNote:"الأسعار المشطوبة والتوفير تُحسب تلقائياً من السعر الشهري.",errTar:"كل سعر يجب أن يكون رقماً أكبر من 0.",tarSaved:"تم حفظ الأسعار",tOfferK:"العرض",tOfferName:"اسم العرض",tOfferNameAr:"اسم العرض بالعربية",tWa:"واتساب المعروض تحت السعر",tSubK:"الصيغة",tSubName:"اسم الصيغة",tSubNameAr:"اسم الصيغة بالعربية",tSubOpt:" (اختياري إذا كانت صيغة واحدة)",tNewOffer:"+ عرض جديد",tNewSub:"+ صيغة جديدة",tSingle:"صيغة واحدة",delOffer:"حذف هذا العرض",delSub:"حذف هذه الصيغة",confirmDel:"اضغط مرة أخرى لتأكيد الحذف",tarDeleted:"تم الحذف",errTarName:"أعطِ اسماً للعرض.",errSubName:"أعطِ اسماً للصيغة.",errSubFirst:"أعطِ أولاً اسماً للصيغة الموجودة.",errLastSub:"هذه آخر صيغة في العرض: احذف العرض بدلاً منها.",errLastOffer:"يجب الإبقاء على عرض واحد على الأقل.",errTarLimit:"تم بلوغ الحد الأقصى (12).",
 newsLbl:"الجديد",promoLbl:"العروض",example:"مثال",
 news:[["معدات جديدة","معدات جديدة في قاعة الأثقال."]],
 promoDemo:["تخفيض 20٪ على اشتراك 3 أشهر","حتى 31 أكتوبر، في استقبال القاعة 1."],
@@ -1575,9 +1597,11 @@ function renderPlan(){
 
 /* ── Tarifs ── */
 function renderTarifs(instant){
-  document.getElementById('offer').innerHTML=Object.keys(PRICES).map(o=>'<button class="'+(o===offer?'on':'')+'" data-o="'+o+'">'+t('offers')[o]+'</button>').join('');
-  const f=document.getElementById('formula');f.hidden=!SUB[offer].length;
-  f.innerHTML=SUB[offer].map(s=>'<button class="'+(s===sub?'on':'')+'" data-f="'+s+'">'+t('subs')[s]+'</button>').join('');
+  if(!PRICES[offer])offer=Object.keys(PRICES)[0];   // offre supprimée entre-temps
+  if(!PRICES[offer][sub])sub=(SUB[offer]||[])[0]||'_';
+  document.getElementById('offer').innerHTML=Object.keys(PRICES).map(o=>'<button class="'+(o===offer?'on':'')+'" data-o="'+esc(o)+'">'+esc(offerName(o))+'</button>').join('');
+  const f=document.getElementById('formula');f.hidden=!showSubs(offer);
+  f.innerHTML=(SUB[offer]||[]).map(s=>'<button class="'+(s===sub?'on':'')+'" data-f="'+esc(s)+'">'+esc(subName(offer,s)||t('tSingle'))+'</button>').join('');
   const p=PRICES[offer][sub],months=[1,3,6,12];
   document.getElementById('dur').innerHTML=t('dur').map((d,i)=>'<button class="'+(i===dur?'on':'')+'" data-u="'+i+'"><span><b>'+d+'</b><small>'+p[i]+'</small></span></button>').join('');
   const price=p[dur],base=p[0]*months[dur],saved=base-price;
@@ -1585,7 +1609,7 @@ function renderTarifs(instant){
   document.getElementById('pSave').textContent=saved>0?fmt(t('saveX'),{x:saved}):(offer==='fit'?t('fitNote'):'');
   document.getElementById('pMonth').textContent=dur>0?fmt(t('month'),{x:Math.round(price/months[dur])}):'';
   document.getElementById('bars').innerHTML=months.map((m,i)=>{const v=p[i]/m;return '<div class="bar'+(i===dur?' on':'')+'"><span>'+t('dur')[i]+'</span><i style="width:'+(v/p[0]*100).toFixed(1)+'%"></i><span>'+Math.round(v)+' '+t('cur')+'</span></div>';}).join('');
-  document.getElementById('ctaNote').textContent=fmt(t('ctaNote'),{p:PHONE[offer]});
+  document.getElementById('ctaNote').textContent=fmt(t('ctaNote'),{p:phoneOf(offer)});
   document.getElementById('pBig').classList.toggle('four',price>=1000);
   rollTo(price,instant);
 }
@@ -1866,7 +1890,12 @@ function applyContenu(c){
   const x=fromContenu(c);
   COACHES.length=0;x.coaches.forEach(r=>COACHES.push(r));
   for(const d in PLAN)delete PLAN[d];Object.assign(PLAN,x.plan);
-  if(Object.keys(x.prices).length){for(const k in PRICES)delete PRICES[k];Object.assign(PRICES,x.prices);}
+  if(Object.keys(x.prices).length){
+    for(const k in PRICES)delete PRICES[k];Object.assign(PRICES,x.prices);
+    for(const k in SUB)delete SUB[k];Object.assign(SUB,x.subs);
+    for(const k in OFFERS)delete OFFERS[k];Object.assign(OFFERS,x.offers);
+    for(const k in SUBN)delete SUBN[k];Object.assign(SUBN,x.subNames);
+  }
   ANNONCES=x.annonces;Object.assign(CAR,x.car);DEFI=x.defi;
   if(Object.keys(x.hrs).length===7){HRS.h=d=>x.hrs[d].h;HRS.f=d=>x.hrs[d].f;}
 }
@@ -2212,7 +2241,22 @@ setInterval(()=>{
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let ANNONCES=[];   // fl_contenu
-let annSeq=2,annType='news',admDay=null,admOffer='fit',admSub='_',admFrom='';
+let annSeq=2,annType='news',admDay=null,admOffer='fit',admSub='_',admFrom='',tarSalle='S2',tarArm='',tarArmT=0;
+// Remplit les champs de l'offre et de la formule choisies (admOffer / admSub à null : nouvelle)
+function tarForm(){
+  if(admOffer!==null&&!PRICES[admOffer])admOffer=Object.keys(PRICES)[0];
+  if(admOffer!==null&&admSub!==null&&!PRICES[admOffer][admSub])admSub=(SUB[admOffer]||[])[0]||'_';
+  const m=admOffer===null?null:OFFERS[admOffer];
+  $('toN').value=m?m.fr:admOffer===null?'':offerName(admOffer);$('toNa').value=m?m.ar:'';
+  tarSalle=m?m.salle:admOffer===null?'S2':(PHONE[admOffer]===PHONE.fit?'S1':'S2');
+  const n=admOffer===null||admSub===null?null:SUBN[admOffer]&&SUBN[admOffer][admSub];
+  $('tsN').value=n?n.fr:admOffer===null||admSub===null?'':subName(admOffer,admSub);$('tsNa').value=n?n.ar:'';
+  const p=admOffer===null||admSub===null?['','','','']:PRICES[admOffer][admSub];
+  $('admPrices').innerHTML=t('dur').map((d,i)=>'<div class="info-row"><label for="tp'+i+'">'+d+'</label><span><input class="inp tp" id="tp'+i+'" type="number" inputmode="numeric" min="1" value="'+p[i]+'"> '+t('cur')+'</span></div>').join('');
+  tarArm='';$('eTar').textContent='';renderAdmin();
+}
+// Suppression en deux appuis : le premier demande confirmation pendant 4 secondes
+function tarConfirm(k){if(tarArm===k)return true;tarArm=k;clearTimeout(tarArmT);tarArmT=setTimeout(()=>{tarArm='';renderAdmin();},4000);renderAdmin();return false;}
 const isoIn=n=>isoAgo(-n);
 function annVisible(){const d=isoAgo(0);return ANNONCES.filter(a=>!a.end||a.end>=d);}
 function annTxt(a){const f=a.fr[0]?a.fr:a.ar,r=a.ar[0]?a.ar:a.fr;return lang==='ar'?r:f;}
@@ -2245,26 +2289,33 @@ function renderAdmin(){
     $('dfTop').innerHTML=top.length?top.map(r=>'<div class="stitem"><span><b>'+r.r+' · <bdi>'+esc(r.n)+'</bdi></b><span>'+sessWord(r.c)+'</span></span></div>').join(''):'<p class="stempty">'+t('dfNone')+'</p>';
   }
   if(curOs==='o-adm-tar'){
-    $('admOffer').innerHTML=Object.keys(PRICES).map(o=>'<button class="'+(o===admOffer?'on':'')+'" data-ao="'+o+'">'+t('offers')[o]+'</button>').join('');
-    const S=SUB[admOffer];$('admSub').hidden=!S.length;
-    $('admSub').innerHTML=S.map(s=>'<button class="'+(s===admSub?'on':'')+'" data-as="'+s+'">'+t('subs')[s]+'</button>').join('');
-    const p=PRICES[admOffer][admSub];
-    $('admPrices').innerHTML=t('dur').map((d,i)=>'<div class="info-row"><label for="tp'+i+'">'+d+'</label><span><input class="inp tp" id="tp'+i+'" type="number" inputmode="numeric" min="1" value="'+p[i]+'"> '+t('cur')+'</span></div>').join('');
+    // Choix de l'offre et de la formule (les champs sont remplis par tarForm, pour ne pas effacer la saisie)
+    $('admOffer').innerHTML=Object.keys(PRICES).map(o=>'<button class="'+(o===admOffer?'on':'')+'" data-ao="'+esc(o)+'">'+esc(offerName(o))+'</button>').join('')
+      +'<button class="'+(admOffer===null?'on':'')+'" data-ao="+">'+t('tNewOffer')+'</button>';
+    const S=admOffer===null?[]:SUB[admOffer]||[];
+    $('admSub').hidden=admOffer===null;
+    $('admSub').innerHTML=S.map(s=>'<button class="'+(s===admSub?'on':'')+'" data-as="'+esc(s)+'">'+esc(subName(admOffer,s)||t('tSingle'))+'</button>').join('')
+      +'<button class="'+(admSub===null?'on':'')+'" data-as="+">'+t('tNewSub')+'</button>';
+    document.querySelectorAll('#toSalle button').forEach(b=>b.classList.toggle('on',b.dataset.ts===tarSalle));
+    $('toDel').hidden=admOffer===null;$('toDel').textContent=tarArm==='o'?t('confirmDel'):t('delOffer');
+    $('tsDel').hidden=admOffer===null||admSub===null||S.length<2;$('tsDel').textContent=tarArm==='s'?t('confirmDel'):t('delSub');
+    $('tsNL').textContent=t('tSubName')+(admOffer===null||(S.length<2&&admSub!==null)?t('tSubOpt'):'');
   }
 }
 function openAdmin(){const a=ACCOUNTS[CUR];if(!a||a.role!=='owner')return;closeSheets();admFrom='app';flow='admin';osStack=[];pinMode='';pinBuf='';$('onb').hidden=false;oGo('o-admin',false);}
 function closeAdmin(){flow='';pinMode='';pinBuf='';if(admFrom==='app'){$('onb').hidden=true;renderHome();renderPlan();renderTarifs(true);setNotes();}else oGo('o-welcome',false);renderExtras();}
 $('onb').addEventListener('click',e=>{
-  const b=e.target.closest('[data-del],[data-pdel],[data-ad2],[data-ao],[data-as],[data-at2]');if(!b)return;
+  const b=e.target.closest('[data-del],[data-pdel],[data-ad2],[data-ao],[data-as],[data-ts],[data-at2]');if(!b)return;
   if(b.dataset.del){flAdmin('fl_admin_annonce_del',{p_id:+b.dataset.del},'annDeleted');}
   else if(b.dataset.pdel!==undefined){const row=PLAN[admDay][+b.dataset.pdel];if(row&&row[5])flAdmin('fl_admin_planning_del',{p_id:row[5]},'planDeleted');}
   else if(b.dataset.ad2){admDay=+b.dataset.ad2;renderAdmin();}
-  else if(b.dataset.ao){admOffer=b.dataset.ao;admSub=SUB[admOffer][0]||'_';$('eTar').textContent='';renderAdmin();}
-  else if(b.dataset.as){admSub=b.dataset.as;$('eTar').textContent='';renderAdmin();}
+  else if(b.dataset.ao){admOffer=b.dataset.ao==='+'?null:b.dataset.ao;admSub=admOffer===null?'_':(SUB[admOffer]||[])[0]||'_';tarForm();}
+  else if(b.dataset.as){admSub=b.dataset.as==='+'?null:b.dataset.as;tarForm();}
+  else if(b.dataset.ts){tarSalle=b.dataset.ts;renderAdmin();}
   else if(b.dataset.at2){annType=b.dataset.at2;if(annType==='promo'&&!$('annE').value)$('annE').value=isoIn(14);renderAdmin();}
 });
 // Enregistrement côté base : message d'erreur précis, puis contenu rechargé chez tout le monde
-const ADM_ERR={forbidden:'admForbidden',duplicate:'errCoachDup',no_name:'errCoach',weak:'errCodeWeak',same:'errCodeSame',bad_pin_format:'errCode4',past_end:'errAnnEnd',no_title:'errAnn'};
+const ADM_ERR={no_offer_name:'errTarName',no_formula_name:'errSubName',unnamed_exists:'errSubFirst',last_formula:'errLastSub',last_offer:'errLastOffer',limit:'errTarLimit',forbidden:'admForbidden',duplicate:'errCoachDup',no_name:'errCoach',weak:'errCodeWeak',same:'errCodeSame',bad_pin_format:'errCode4',past_end:'errAnnEnd',no_title:'errAnn'};
 async function flAdmin(fn,params,okMsg,errId){
   const r=await flMe(fn,params);
   if(r&&r.status==='ok'){await flRefreshContenu();renderAdmin();if(okMsg)toast(t(okMsg));return r;}
@@ -2277,7 +2328,7 @@ function admBusy(o,on){const b=document.querySelector('#onb [data-o="'+o+'"]');i
 function admAction(o){
   if(o==='admAnn'){$('eAnn').textContent='';oGo('o-adm-ann');return true;}
   if(o==='admPlan'){$('ePlan').textContent='';oGo('o-adm-plan');return true;}
-  if(o==='admTar'){$('eTar').textContent='';oGo('o-adm-tar');return true;}
+  if(o==='admTar'){if(admOffer===null||!PRICES[admOffer]){admOffer=Object.keys(PRICES)[0];admSub=(SUB[admOffer]||[])[0]||'_';}oGo('o-adm-tar');tarForm();return true;}
   if(o==='admCoach'){coachForm(null);oGo('o-adm-coach');return true;}
   if(o==='coachCancel'){coachForm(null);renderAdmin();return true;}
   if(o==='coachSave'){
@@ -2324,9 +2375,32 @@ function admAction(o){
   }
   if(o==='tarSave'){
     const v=[0,1,2,3].map(i=>parseInt($('tp'+i).value,10));
+    const on=$('toN').value.trim(),ona=$('toNa').value.trim(),sn=$('tsN').value.trim(),sna=$('tsNa').value.trim();
+    if(!on&&!ona){$('eTar').textContent=t('errTarName');return true;}
+    if(admSub===null&&!sn&&!sna){$('eTar').textContent=t('errSubName');return true;}
     if(v.some(x=>!(x>0))){$('eTar').textContent=t('errTar');return true;}
     $('eTar').textContent='';admBusy('tarSave',true);
-    flAdmin('fl_admin_tarif_set',{p_offre:admOffer,p_sous:admSub,p_prix:v},'tarSaved','eTar').then(r=>{admBusy('tarSave',false);if(r)renderTarifs(true);});
+    const done=r=>{admBusy('tarSave',false);if(!r)return;admSub=r.sous||admSub;tarForm();renderTarifs(true);};
+    if(admOffer===null){
+      flAdmin('fl_admin_offre_add',{p_nom_fr:on,p_nom_ar:ona,p_salle:tarSalle,p_sous_fr:sn,p_sous_ar:sna,p_prix:v},'tarSaved','eTar').then(r=>{if(r)admOffer=r.code;done(r);});
+      return true;
+    }
+    const m=OFFERS[admOffer]||{},code=admOffer;
+    const first=on!==(m.fr||'')||ona!==(m.ar||'')||tarSalle!==m.salle?flAdmin('fl_admin_offre_save',{p_code:code,p_nom_fr:on,p_nom_ar:ona,p_salle:tarSalle},null,'eTar'):Promise.resolve({status:'ok'});
+    first.then(r=>{
+      if(!r){admBusy('tarSave',false);return;}
+      flAdmin('fl_admin_tarif_save',{p_offre:code,p_sous:admSub,p_nom_fr:sn,p_nom_ar:sna,p_prix:v},'tarSaved','eTar').then(done);
+    });
+    return true;
+  }
+  if(o==='offerDel'){
+    if(admOffer===null||!tarConfirm('o'))return true;
+    flAdmin('fl_admin_offre_del',{p_code:admOffer},'tarDeleted','eTar').then(r=>{if(!r)return;admOffer=Object.keys(PRICES)[0];admSub=(SUB[admOffer]||[])[0]||'_';tarForm();renderTarifs(true);});
+    return true;
+  }
+  if(o==='subDel'){
+    if(admOffer===null||admSub===null||!tarConfirm('s'))return true;
+    flAdmin('fl_admin_tarif_del',{p_offre:admOffer,p_sous:admSub},'tarDeleted','eTar').then(r=>{if(!r)return;admSub=(SUB[admOffer]||[])[0]||'_';tarForm();renderTarifs(true);});
     return true;
   }
   return false;
